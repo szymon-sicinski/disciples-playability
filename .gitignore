@@ -1,0 +1,81 @@
+# --- Game bytes: never commit these. ---------------------------------------
+# This repository is a wrapper for a game the user owns; no part of that
+# installation may ever be added here. The first block is the hard rule, the
+# second covers the file types the install actually contains.
+*.EXE
+*.exe
+*.dll
+*.DBF
+*.dbf
+*.dbi
+*.dlg
+*.smk
+*.wdb
+*.sg
+*.bin
+*.cue
+*.iso
+*.img
+*.sub
+*.ccd
+DISCIPLE.INI
+# Backup written next to the user's INI (never a source file).
+*.orig
+
+# A game install dropped inside the tree, in any of its usual spellings.
+Game files/
+gamedata/
+GAMES/
+Globals/
+Savegame/
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Virtual environments ---------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# --- Test / lint / type-check caches ---------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# --- Editors and OS ---------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Local scratch ----------------------------------------------------------
+*.log
+!tests/fixtures/**/*.log
