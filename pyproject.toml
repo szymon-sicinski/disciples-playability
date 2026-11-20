@@ -46,6 +46,9 @@ where = ["src"]
 minversion = "8.0"
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "realgame: tests that run against a real install (DISCIPLES_GAME_DIR)",
+]
 
 [tool.ruff]
 target-version = "py310"

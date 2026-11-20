@@ -18,6 +18,16 @@
 *.img
 *.sub
 *.ccd
+# M5 found three more game-data types the scaffold did not know about: the
+# large-frame MQDB containers, the fonts, and the music + text configs.
+*.FF
+*.ff
+*.MFT
+*.mft
+*.wav
+*.WAV
+*.dat
+*.DAT
 DISCIPLE.INI
 # Backup written next to the user's INI (never a source file).
 *.orig

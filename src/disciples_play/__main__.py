@@ -1,30 +1,32 @@
 """Entry point for ``disciples-play`` and ``python -m disciples_play``.
 
-This is a stub. It exists so the console script, the packaging metadata and
-the CI matrix are exercised from the first commit; it does not touch a game
-installation and rewrites nothing. The real subcommands arrive in:
+Subcommands:
 
-* M1 - the INI model and rewrite core (``disciples_play.ini``)
-* M2 - ``disciples-play --game-dir DIR [--dry-run] [--print-command]``
-* M3 - the ``cnc-ddraw`` preset and its pinned fetch
-* M4 - ``disciples-play doctor --game-dir DIR``
+* ``data`` (M5) -- a read-only structural report of the game's data layer:
+  directory inventory, dBase III table geometry, ``MQDB`` container
+  hypothesis votes, and digests of the plain-text formats.  It never decodes
+  an image to pixels, never dumps palette entries, and never prints file
+  hashes.
 
-See ``docs/plans/00-playability-plan.md`` for the full specification.
+The launcher, INI rewriter and cnc-ddraw preset land in M1-M3; see
+``docs/plans/00-playability-plan.md`` for the full specification.
 """
 
 from __future__ import annotations
 
+import argparse
+import json
 import sys
 
 from . import __version__
 
 USAGE = """\
-usage: disciples-play [-h] [--version]
+usage: disciples-play [-h] [--version] {data}
 
 Portability and comfort wrapper for Disciples: Sacred Lands Gold (1999).
 
-This build is a scaffold: the launcher, the INI rewriter and the cnc-ddraw
-preset are not implemented yet. See docs/plans/00-playability-plan.md.
+subcommands:
+  data    print a read-only structural report of the game's data files
 
 options:
   -h, --help     show this message and exit
@@ -32,13 +34,53 @@ options:
 """
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Print usage/version and return a process exit code.
+def _data_main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="disciples-play data",
+        description="Read-only structural report of the game's data files.",
+    )
+    parser.add_argument("--game-dir", required=True, help="path to the game install")
+    parser.add_argument(
+        "--json", action="store_true", help="emit the report as JSON instead of text"
+    )
+    args = parser.parse_args(argv)
 
-    Exit codes so far: 0 on success, 2 on an unrecognised argument (the
-    convention ``argparse`` uses, so it stays consistent once the real parser
-    replaces this stub).
+    from .data import build_report, render_text
+
+    try:
+        report = build_report(args.game_dir)
+    except NotADirectoryError as exc:
+        print(f"disciples-play data: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        _emit(json.dumps(report, indent=2))
+    else:
+        _emit(render_text(report))
+    return 0
+
+
+def _emit(text: str) -> None:
+    """Write ``text`` to stdout, tolerating an early-closed pipe (``| head``)."""
+
+    try:
+        print(text)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        # stdout was closed by a consumer like `head`; that is not an error.
+        try:
+            sys.stdout.close()
+        except OSError:
+            pass
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Dispatch a subcommand and return a process exit code.
+
+    Exit codes: 0 on success, 2 on an unrecognised argument or a bad install
+    directory (the convention ``argparse`` uses).
     """
+
     args = sys.argv[1:] if argv is None else argv
 
     if not args or args[0] in {"-h", "--help"}:
@@ -48,6 +90,9 @@ def main(argv: list[str] | None = None) -> int:
     if args[0] == "--version":
         print(f"disciples-play {__version__}")
         return 0
+
+    if args[0] == "data":
+        return _data_main(args[1:])
 
     print(f"disciples-play: unrecognised argument {args[0]!r}", file=sys.stderr)
     print("try 'disciples-play --help'", file=sys.stderr)
