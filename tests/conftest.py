@@ -26,18 +26,24 @@ if str(SRC) not in sys.path:
 
 def _exec_allowed_scratch() -> Path:
     probe_dir = Path(tempfile.mkdtemp(prefix="disciples-execprobe-"))
+    probe = probe_dir / "probe.sh"
+    probe.write_text("#!/bin/sh\nexit 0\n")
+    probe.chmod(0o755)
     try:
-        probe = probe_dir / "probe.sh"
-        probe.write_text("#!/bin/sh\nexit 0\n")
-        probe.chmod(0o755)
-        try:
-            subprocess.run([str(probe)], check=True, capture_output=True)
-            return probe_dir
-        except (OSError, subprocess.CalledProcessError):
-            pass
-    finally:
-        shutil.rmtree(probe_dir, ignore_errors=True)
+        subprocess.run([str(probe)], check=True, capture_output=True)
+        exec_ok = True
+    except (OSError, subprocess.CalledProcessError):
+        exec_ok = False
 
+    if exec_ok:
+        # The default temp dir executes; keep it (drop only the probe script)
+        # so the returned directory stays alive for the fixtures that write
+        # into it. Returning a directory that a ``finally`` then deletes is the
+        # bug this branch exists to avoid.
+        probe.unlink(missing_ok=True)
+        return probe_dir
+
+    shutil.rmtree(probe_dir, ignore_errors=True)
     fallback = Path(__file__).resolve().parent.parent / ".pytest-scratch"
     fallback.mkdir(parents=True, exist_ok=True)
     return fallback
