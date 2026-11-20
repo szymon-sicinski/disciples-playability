@@ -231,7 +231,7 @@ cannot be delegated.
 
 | # | Risk | Cheapest experiment | Cost | If it fires |
 |---|---|---|---|---|
-| R1 | The game resolves `[Installation]` values **relative** to its own directory, making the whole absolute-path rewrite unnecessary (or worse, it needs `..\` forms) | **E1**: copy the INI, set `globals=Globals` and friends, launch, load the autosave (3 min, human) | 3 min | M1/M2 shrink to "write a static relative INI"; ~35 % of the slice's tokens saved |
+| R1 | The game resolves `[Installation]` values **relative** to its own directory, making the whole absolute-path rewrite unnecessary (or worse, it needs `..\` forms) | **E1**: copy the INI, set `globals=Globals` and friends, launch, load the autosave (3 min, human) | 3 min | M1/M2 shrink to "write a static relative INI"; ~35 % of the slice's tokens saved. **RESOLVED 2026-11-20** — E1 confirmed: every `[Installation]`/`[InstallationClient]` value works relative (music, SFX, intro video, briefing included); M1 normalises absolute→relative, no key stays absolute. |
 | R2 | cnc-ddraw's window path breaks the 8-bit palette animation (palette shimmer, stuck cursor colours) | **E2**: run the 4-way `DDraw × PaletteAnim` matrix via `scripts/probe-matrix.sh` (10 min, human) | 10 min | Ship `PaletteAnim=0` in the preset; document the tradeoff |
 | R3 | cnc-ddraw requires the game fullscreen, but the game's own windowed path fights it | **E3**: one run with `InWindow=0` + cnc-ddraw windowed (2 min, human) | 2 min | Preset pins `InWindow=0`; document; if it still refuses, fall back to `InWindow=1` GDI and measure frame drops |
 | R4 | Mouse targeting is offset in a scaled window (adjmouse), or the cursor escapes to the second monitor | **E4**: click a unit and a menu button at 3× (5 min, human) | 5 min | Tune `adjmouse` / `Ctrl+Tab` unlock; worst case: windowed at 1× |
@@ -275,7 +275,7 @@ repo's `docs/verification.md` must ship with them all marked *unverified*.
 
 | # | Question | Currently | How it gets answered |
 |---|---|---|---|
-| Q1 | Does the game accept relative paths in `[Installation]`? | **H** (unmeasured) | E1 |
+| Q1 | Does the game accept relative paths in `[Installation]`? | **V** — E1 + maintainer confirmation: every resource (music, SFX, intro video, briefing) loads from relative names | answered by E1 (2026-11-20) |
 | Q2 | Which module creates the DirectDraw object — `HA312W32` or `SHW32`? | **H** (both carry the string) | Not needed for v0.1; note it |
 | Q3 | Does the game read `EXE\Disciple.ini` relative to the module path or the CWD? | **H** (string `EXE\Disciple.ini` present) | M2 test once on the host; launcher must not rely on CWD either way |
 | Q4 | Does palette animation survive cnc-ddraw's windowed OpenGL renderer? | **H** | E2 |
