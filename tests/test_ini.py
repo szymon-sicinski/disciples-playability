@@ -1,14 +1,14 @@
-"""Tests for the lossless INI model and the installation-path normaliser.
+"""Tests for the lossless INI model and the installation-path rewriter.
 
 Every fixture is synthetic -- generated for these tests, never read from a game
 install -- and no test touches a real installation directory.
 
-The 21 installation keys use the maintainer-confirmed names (music, SFX, intro
-video and briefing all load from relative paths, so there is no per-key
-exception). The fixture reproduces the measured shape of the real file (4
-sections, 41 keys, CRLF, lowercase keys, ``key=value`` with no spacing) with
-invented, scrubbed values. Normalising a stale absolute INI to the canonical
-relative folder names is the repair the launcher performs.
+The 21 installation keys use the measured key names, and the fixture reproduces
+the measured shape of the real file (4 sections, 41 keys, CRLF, lowercase keys,
+``key=value`` with no spacing) with invented, scrubbed values. The default
+operation rewrites a stale absolute INI to the install's actual location as
+absolute Windows paths (``path_style="wine"``); relative emission is kept behind
+an explicit flag and covered separately.
 """
 
 from __future__ import annotations
@@ -97,8 +97,10 @@ def test_fixture_has_expected_shape() -> None:
     assert section_block(text, "CDROM").count("=") == 1
 
 
-def test_normalises_all_21_keys_to_relative() -> None:
-    rewritten = ini.rewrite_installation_paths(load_fixture("sample-disciple.ini"))
+def test_relative_style_normalises_all_21_keys() -> None:
+    rewritten = ini.rewrite_installation_paths(
+        load_fixture("sample-disciple.ini"), path_style="relative"
+    )
     assignments = path_assignments(rewritten)
     assert len(assignments) == 21
     folders = {key: value for key, value in assignments}
@@ -120,14 +122,21 @@ def test_normalises_all_21_keys_to_relative() -> None:
     assert all(":" not in value and "\\" not in value for value in folders.values())
 
 
-def test_relative_is_the_default_style() -> None:
+def test_absolute_wine_is_the_default_style(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ini.shutil, "which", lambda _name: None)
     text = crlf("[Installation]", "globals=X:\\Games\\Disciples Gold\\globals")
-    out = ini.rewrite_installation_paths(text)  # no path_style -> relative
-    assert "globals=Globals" in out
+    out = ini.rewrite_installation_paths(text, "/home/user/Disciples Gold")  # no style
+    assert "globals=Z:\\home\\user\\Disciples Gold\\Globals" in out
 
 
-def test_repairs_a_stale_absolute_ini() -> None:
+def test_default_style_requires_install_dir() -> None:
+    with pytest.raises(ValueError):
+        ini.rewrite_installation_paths("[Installation]\r\nglobals=Globals\r\n")
+
+
+def test_repairs_a_stale_absolute_ini_to_new_root(monkeypatch: pytest.MonkeyPatch) -> None:
     # The failure mode in the field: a GOG/Heroic install with X:\ paths.
+    monkeypatch.setattr(ini.shutil, "which", lambda _name: None)
     text = crlf(
         "[Installation]",
         "globals=X:\\Games\\Heroic\\Disciples Gold\\globals",
@@ -135,15 +144,16 @@ def test_repairs_a_stale_absolute_ini() -> None:
         "[InstallationClient]",
         "music=X:\\Games\\Heroic\\Disciples Gold\\music",
     )
-    out = ini.rewrite_installation_paths(text)
-    assert "globals=Globals\r\n" in out
-    assert "scenarios=Scens\r\n" in out
-    assert "music=Music\r\n" in out
+    out = ini.rewrite_installation_paths(text, "/new/root", "wine")
+    assert "globals=Z:\\new\\root\\Globals\r\n" in out
+    assert "scenarios=Z:\\new\\root\\Scens\r\n" in out
+    assert "music=Z:\\new\\root\\Music\r\n" in out
 
 
-def test_move_installment_only_the_21_values_differ() -> None:
+def test_move_installment_only_the_21_values_differ(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ini.shutil, "which", lambda _name: None)
     original = load_fixture("sample-disciple.ini")
-    rewritten = ini.rewrite_installation_paths(original)
+    rewritten = ini.rewrite_installation_paths(original, "/new/root", "wine")
     before = original.splitlines(keepends=True)
     after = rewritten.splitlines(keepends=True)
     assert len(before) == len(after)
@@ -153,11 +163,13 @@ def test_move_installment_only_the_21_values_differ() -> None:
         eq = left.find("=")
         assert eq >= 0
         assert right[: eq + 1] == left[: eq + 1]  # only the value part differs
+        assert right[eq + 1 :].lstrip().startswith("Z:\\new\\root\\")
 
 
-def test_disciple_and_cdrom_sections_untouched() -> None:
+def test_disciple_and_cdrom_sections_untouched(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ini.shutil, "which", lambda _name: None)
     original = load_fixture("sample-disciple.ini")
-    rewritten = ini.rewrite_installation_paths(original)
+    rewritten = ini.rewrite_installation_paths(original, "/new/root")
     for name in ("Disciple", "CDROM"):
         assert section_block(rewritten, name) == section_block(original, name)
 
@@ -169,14 +181,14 @@ def test_unknown_section_preserved() -> None:
         "[Installation]",
         "globals=X:\\Games\\Disciples Gold\\globals",
     )
-    out = ini.rewrite_installation_paths(text)
+    out = ini.rewrite_installation_paths(text, path_style="relative")
     assert "[Weird]\r\nkey=value\r\n" in out
 
 
 def test_missing_section_tolerated_and_logged(caplog: pytest.LogCaptureFixture) -> None:
     text = crlf("[Disciple]", "language=english")
     with caplog.at_level("WARNING"):
-        out = ini.rewrite_installation_paths(text)
+        out = ini.rewrite_installation_paths(text, path_style="relative")
     assert out == text
     assert "installation-path sections missing" in caplog.text
 
@@ -187,7 +199,7 @@ def test_equals_and_equals_space_both_read() -> None:
         "globals=X:\\old\\globals",
         "imgs1 = X:\\old\\imgs1",
     )
-    out = ini.rewrite_installation_paths(text)
+    out = ini.rewrite_installation_paths(text, path_style="relative")
     assert "globals=Globals\r\n" in out
     assert "imgs1 = Imgs1\r\n" in out  # spacing preserved
 
@@ -202,23 +214,27 @@ def test_comment_only_and_empty_value_lines_kept() -> None:
         "[Disciple]",
         "language=english",
     )
-    out = ini.rewrite_installation_paths(text)
+    out = ini.rewrite_installation_paths(text, path_style="relative")
     assert "; a comment on its own line\r\n" in out
     assert "empty=\r\n" in out  # empty value preserved, not rewritten
 
 
-def test_crlf_preserved_across_rewrite() -> None:
+def test_crlf_preserved_across_rewrite(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ini.shutil, "which", lambda _name: None)
     original = load_fixture("sample-disciple.ini")
-    rewritten = ini.rewrite_installation_paths(original)
+    rewritten = ini.rewrite_installation_paths(original, "/new/root")
     assert rewritten.count("\r\n") == original.count("\r\n")
     assert rewritten.count("\n") == rewritten.count("\r\n")  # no bare LF introduced
 
 
-def test_unknown_key_falls_back_and_warns(caplog: pytest.LogCaptureFixture) -> None:
+def test_unknown_key_falls_back_and_warns(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(ini.shutil, "which", lambda _name: None)
     text = crlf("[Installation]", "somesuch=X:\\old\\somefolder")
     with caplog.at_level("WARNING"):
-        out = ini.rewrite_installation_paths(text)
-    assert "somesuch=Somefolder" in out
+        out = ini.rewrite_installation_paths(text, "/new", "wine")
+    assert "somesuch=Z:\\new\\Somefolder" in out
     assert "no canonical folder for key 'somesuch'" in caplog.text
 
 
@@ -270,9 +286,51 @@ def test_wine_style_requires_install_dir() -> None:
         ini.rewrite_installation_paths("[Installation]\r\nglobals=Globals\r\n", path_style="wine")
 
 
+def test_relative_style_warns_when_install_dir_passed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    text = crlf("[Installation]", "globals=X:\\old\\globals")
+    with caplog.at_level("WARNING"):
+        out = ini.rewrite_installation_paths(text, "/ignored", "relative")
+    assert "install_dir is ignored" in caplog.text
+    assert "globals=Globals\r\n" in out
+
+
 def test_unknown_path_style_raises() -> None:
     with pytest.raises(ValueError):
         ini.rewrite_installation_paths("x", path_style="nope")
+
+
+def test_parse_accepts_bytes_and_decodes_cp1252() -> None:
+    raw = b"[Disciple]\r\nDefPlayer=Szymon M\xfcller\r\n"
+    assert ini.parse(raw).to_text() == "[Disciple]\r\nDefPlayer=Szymon Müller\r\n"
+
+
+def test_parse_rejects_other_types() -> None:
+    with pytest.raises(TypeError):
+        ini.parse(42)  # type: ignore[arg-type]
+
+
+def test_read_ini_preserves_crlf_and_cp1252(tmp_path: Path) -> None:
+    target = tmp_path / "DISCIPLE.INI"
+    target.write_bytes(b"[Disciple]\r\nDefPlayer=Szymon M\xfcller\r\n")
+    text = ini.read_ini(target)
+    assert text == "[Disciple]\r\nDefPlayer=Szymon Müller\r\n"
+    assert text.count("\r\n") == 2
+    assert text.replace("\r\n", "").count("\n") == 0  # no bare LF survived
+
+
+def test_write_ini_encodes_cp1252_by_default(tmp_path: Path) -> None:
+    target = tmp_path / "DISCIPLE.INI"
+    ini.write_ini(target, "DefPlayer=Szymon Müller\r\n", mode="inplace")
+    assert target.read_bytes() == b"DefPlayer=Szymon M\xfcller\r\n"
+
+
+def test_write_ini_encoding_override(tmp_path: Path) -> None:
+    target = tmp_path / "DISCIPLE.INI"
+    ini.write_ini(target, "DefPlayer=Szymon Müller\r\n", mode="inplace", encoding="utf-8")
+    # ü is 0xFC in cp1252 but 0xC3 0xBC in UTF-8, so this proves the override
+    assert target.read_bytes() == b"DefPlayer=Szymon M\xc3\xbcller\r\n"
 
 
 def test_unknown_mode_raises(tmp_path: Path) -> None:
@@ -321,6 +379,15 @@ def test_idempotent_second_write_no_mtime_change(tmp_path: Path) -> None:
 
 
 def test_rewrite_is_idempotent() -> None:
-    once = ini.rewrite_installation_paths(load_fixture("sample-disciple.ini"))
-    twice = ini.rewrite_installation_paths(once)
+    once = ini.rewrite_installation_paths(
+        load_fixture("sample-disciple.ini"), path_style="relative"
+    )
+    twice = ini.rewrite_installation_paths(once, path_style="relative")
+    assert twice == once
+
+
+def test_absolute_rewrite_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ini.shutil, "which", lambda _name: None)
+    once = ini.rewrite_installation_paths(load_fixture("sample-disciple.ini"), "/new/root", "wine")
+    twice = ini.rewrite_installation_paths(once, "/new/root", "wine")
     assert twice == once

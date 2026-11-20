@@ -6,20 +6,24 @@ data lives under two sections, ``[Installation]`` (15 keys) and
 values as absolute ``X:\\Games\\...`` paths, so moving the install -- or
 changing the Wine drive mapping -- breaks the game.
 
-The maintainer's E1 experiment established that the game resolves those 21
-values *relative to its own ``EXE`` directory* when they are written as bare
-folder names (``globals=Globals``), and then confirmed that every resource --
-music, sound effects, the intro video and the briefing screens -- loads from
-those relative names, so no key needs to stay absolute. This module therefore
-*normalises* the two sections to relative form: the primary operation rewrites
-every absolute path to the canonical on-disk folder name, leaving every other
-byte of the file untouched. Absolute Windows-path emission remains available
-via ``path_style="wine"`` for installs or keys that need it.
+The proven-working configuration is the absolute one the game ships with, so
+the primary operation rewrites each of those 21 values to the install's actual
+location as a Windows path (``path_style="wine"``, the default). A
+``path_style="relative"`` mode that emits bare folder names is kept behind an
+explicit flag for the maintainer's portability experiment, but it is currently
+*falsified* in game: bare relative names fail with "unable to load fonts" (the
+font files live at the install root, not under ``Exe``), and ``..\\``-prefixed
+names hit a case-sensitivity failure in the data layer (``..\\interf\\Tapp.dbf``
+requested vs ``Interf/TApp.dbf`` on disk) that the INI cannot fix. See the
+plan's R1 / Q1 for the two recorded failures.
 
 The model is line-oriented and verbatim: the parser records each physical line
 *with* its newline terminator, so serialising an untouched document returns the
 exact input bytes (CRLF included). Nothing here uses ``configparser``, which
-normalises key case and drops comments.
+normalises key case and drops comments. The file is cp1252 (it carries names
+such as ``Szymon Müller``), so reads and writes go through bytes with an
+explicit ``encoding`` (default ``cp1252``); ``Path.read_text``/``write_text``
+would silently re-encode to UTF-8 and strip every CRLF.
 """
 
 from __future__ import annotations
@@ -35,6 +39,7 @@ __all__ = [
     "IniDocument",
     "IniLine",
     "parse",
+    "read_ini",
     "rewrite_installation_paths",
     "to_windows_path",
     "write_ini",
@@ -45,14 +50,15 @@ logger = logging.getLogger(__name__)
 #: Sections whose values are installation data paths.
 _INSTALLATION_SECTIONS = ("installation", "installationclient")
 
-#: Accepted values for ``path_style``.
-_PATH_STYLES = ("relative", "wine")
+#: Accepted values for ``path_style``. ``wine`` first: it is the default and the
+#: only evidence-backed form.
+_PATH_STYLES = ("wine", "relative")
 
 #: Accepted values for ``mode`` in :func:`write_ini`.
 _WRITE_MODES = ("backup", "inplace", "copy-tree")
 
-#: Canonical on-disk folder name for each INI key, from the maintainer's E1
-#: result (2026-11-20). The INI keys are lowercase; the real folders are not a
+#: Canonical on-disk folder name for each INI key, measured on the install
+#: (2026-11-20). The INI keys are lowercase; the real folders are not a
 #: plain capitalisation in every case (``scenarios`` -> ``Scens``,
 #: ``imgdata`` -> ``ImgData``), which is why this is a table rather than a
 #: ``str.title()`` call. ``[InstallationClient]`` reuses six of these names, so
@@ -110,9 +116,30 @@ class IniDocument:
         return "".join(line.raw for line in self.lines)
 
 
-def parse(text: str) -> IniDocument:
-    """Parse INI text into an :class:`IniDocument` without losing a byte."""
+def parse(text: str | bytes, encoding: str = "cp1252") -> IniDocument:
+    """Parse INI text into an :class:`IniDocument` without losing a byte.
+
+    ``text`` may be ``str`` or ``bytes``; bytes are decoded with ``encoding``
+    (default ``cp1252``, the game's code page) with no newline translation, so
+    CRLF survives either way. A value that is neither raises ``TypeError`` here
+    at the boundary rather than failing later inside :meth:`IniDocument.to_text`.
+    """
+    if isinstance(text, bytes):
+        text = text.decode(encoding)
+    elif not isinstance(text, str):
+        raise TypeError(f"parse() expected str or bytes, got {type(text).__name__}")
     return IniDocument([IniLine(part) for part in text.splitlines(keepends=True)])
+
+
+def read_ini(path: str | os.PathLike[str], encoding: str = "cp1252") -> str:
+    """Read an INI file as ``str``, preserving CRLF and decoding with ``encoding``.
+
+    A binary read plus an explicit decode performs no newline translation, so
+    ``\\r\\n`` survives -- unlike ``Path.read_text()``, which silently converts
+    every CRLF to LF. This is the read side of :func:`write_ini` and the natural
+    companion to :func:`parse` for a cp1252 file.
+    """
+    return Path(path).read_bytes().decode(encoding)
 
 
 def _section_name(content: str) -> str | None:
@@ -201,25 +228,28 @@ def _z_drive_fallback(posix_path: str) -> str:
 
 
 def rewrite_installation_paths(
-    text: str,
+    text: str | bytes,
     install_dir: str | os.PathLike[str] | None = None,
-    path_style: str = "relative",
+    path_style: str = "wine",
+    encoding: str = "cp1252",
 ) -> str:
-    """Normalise the 21 installation paths in ``text``.
+    """Rewrite the 21 installation paths in ``text``.
 
     Only assignment lines inside ``[Installation]`` and ``[InstallationClient]``
     are touched; every other line -- other sections, comments, blanks, CRLF -- is
-    returned exactly as found.
+    returned exactly as found. ``text`` may be ``str`` or ``bytes`` (decoded with
+    ``encoding``, default ``cp1252``).
 
     ``path_style`` controls how each key's value is written:
 
-    * ``"relative"`` (default): the bare canonical folder name (``Globals``,
-      ``Scens``, ``ImgData``, ...). This is the repair form -- the game resolves
-      it relative to its own ``EXE`` directory, so the INI survives the install
-      moving. ``install_dir`` is ignored.
-    * ``"wine"``: an absolute Windows path, ``<install_dir>\\<folder>``, with
-      ``install_dir`` converted via :func:`to_windows_path`. Requires
-      ``install_dir``.
+    * ``"wine"`` (default): an absolute Windows path, ``<install_dir>\\<folder>``,
+      with ``install_dir`` converted via :func:`to_windows_path`. This is the
+      proven-working configuration -- it is what the game ships with -- and
+      requires ``install_dir``.
+    * ``"relative"``: the bare canonical folder name (``Globals``, ``Scens``,
+      ``ImgData``, ...). Kept only for the maintainer's portability experiment,
+      which is currently falsified in game (see the module docstring); pass it
+      explicitly. ``install_dir`` is ignored, and passing one logs a warning.
 
     A key that is not in the canonical table falls back to the title-cased last
     path component of its old value and logs a warning, so an unexpected key
@@ -231,12 +261,14 @@ def rewrite_installation_paths(
     windows_root: str | None
     if path_style == "wine":
         if install_dir is None:
-            raise ValueError("install_dir is required when path_style='wine'")
+            raise ValueError("install_dir is required when path_style='wine' (the default)")
         windows_root = to_windows_path(install_dir)
     else:
+        if install_dir is not None:
+            logger.warning("install_dir is ignored when path_style='relative'")
         windows_root = None
 
-    document = parse(text)
+    document = parse(text, encoding)
     current_section: str | None = None
     seen_sections: set[str] = set()
 
@@ -286,12 +318,15 @@ def write_ini(
     path: str | os.PathLike[str],
     text: str,
     mode: str = "backup",
+    encoding: str = "cp1252",
 ) -> bool:
     """Write ``text`` to ``path`` honouring the backup ``mode``.
 
     Returns ``True`` when the file was written and ``False`` when it already
     held the exact bytes -- a no-op run never touches the file, so its mtime is
-    preserved.
+    preserved. ``text`` is encoded with ``encoding`` (default ``cp1252``, the
+    game's code page) and written as bytes, so nothing is re-encoded to UTF-8
+    and CRLF newlines are preserved verbatim.
 
     ``mode``:
 
@@ -309,7 +344,7 @@ def write_ini(
         )
 
     target = Path(path)
-    new_bytes = text.encode("utf-8")
+    new_bytes = text.encode(encoding)
 
     try:
         current = target.read_bytes()
