@@ -41,6 +41,7 @@ __all__ = [
     "parse",
     "read_ini",
     "rewrite_installation_paths",
+    "rewritten_key_count",
     "to_windows_path",
     "write_ini",
 ]
@@ -297,6 +298,41 @@ def rewrite_installation_paths(
         )
 
     return document.to_text()
+
+
+def rewritten_key_count(
+    before: str | bytes,
+    after: str | bytes,
+    encoding: str = "cp1252",
+) -> int:
+    """Count installation-path assignment lines whose value changed.
+
+    ``before`` and ``after`` are the inputs/outputs of
+    :func:`rewrite_installation_paths`. The rewrite never adds or removes
+    lines, so the two documents are walked in lockstep and only assignment
+    lines inside the two installation sections are counted -- a key rewritten
+    to itself scores 0, which is what makes the "N keys rewritten" summary an
+    idempotency-visible count.
+    """
+    before_doc = parse(before, encoding)
+    after_doc = parse(after, encoding)
+    if len(before_doc.lines) != len(after_doc.lines):
+        return sum(
+            1 for b, a in zip(before_doc.lines, after_doc.lines, strict=False) if b.raw != a.raw
+        )
+
+    count = 0
+    section: str | None = None
+    for b_line, a_line in zip(before_doc.lines, after_doc.lines, strict=True):
+        content = b_line.content
+        section_name = _section_name(content)
+        if section_name is not None:
+            section = section_name
+            continue
+        if section is not None and section.lower() in _INSTALLATION_SECTIONS:
+            if b_line.raw != a_line.raw and _split_assignment(content) is not None:
+                count += 1
+    return count
 
 
 def _folder_for(key: str, value: str) -> str:

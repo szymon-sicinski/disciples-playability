@@ -391,3 +391,28 @@ def test_absolute_rewrite_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None
     once = ini.rewrite_installation_paths(load_fixture("sample-disciple.ini"), "/new/root", "wine")
     twice = ini.rewrite_installation_paths(once, "/new/root", "wine")
     assert twice == once
+
+
+def test_rewritten_key_count_counts_only_changed_install_values() -> None:
+    before = crlf(
+        "[Installation]",
+        "globals=X:\\\\old\\\\globals",
+        "imgs1=X:\\\\old\\\\imgs1",
+        "[Disciple]",
+        "language=english",
+    )
+    after = crlf(
+        "[Installation]",
+        "globals=Z:\\\\new\\\\Globals",
+        "imgs1=X:\\\\old\\\\imgs1",  # already at the target: unchanged
+        "[Disciple]",
+        "language=english",
+    )
+    assert ini.rewritten_key_count(before, after) == 1
+
+
+def test_rewritten_key_count_idempotent_is_zero() -> None:
+    text = crlf("[Installation]", "globals=X:\\\\old\\\\globals")
+    once = ini.rewrite_installation_paths(text, path_style="relative")
+    assert ini.rewritten_key_count(text, once) == 1
+    assert ini.rewritten_key_count(once, once) == 0
