@@ -302,7 +302,10 @@ def test_config_file_install_source(
 ) -> None:
     root = make_install(tmp_path / "install")
     config_dir = tmp_path / "config"
+    # config_path() reads XDG_CONFIG_HOME on POSIX and APPDATA on Windows; set
+    # both so the test is platform-agnostic (only the relevant one is read).
     monkeypatch.setenv("XDG_CONFIG_HOME", str(config_dir))
+    monkeypatch.setenv("APPDATA", str(config_dir))
     (config_dir / "disciples-play").mkdir(parents=True)
     (config_dir / "disciples-play" / "config.ini").write_text(f"game_dir = {root}\n")
 
@@ -331,6 +334,7 @@ def test_no_install_specified_exit_2(
 ) -> None:
     monkeypatch.delenv("DISCIPLES_GAME_DIR", raising=False)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "no-config"))
+    monkeypatch.setenv("APPDATA", str(tmp_path / "no-config"))
     assert main(["--print-command"]) == 2
     assert "no install specified" in capsys.readouterr().err
 
