@@ -122,7 +122,7 @@ Fields: `TXT_ID C:10`, `ENGLISH C:254`, `FRENCH C:254`, `GERMAN C:254`,
 `VERIFIED L:1`, `CONTEXT C:254`. This is the localisation table (three
 languages, 254-byte strings). **V**
 
-`Scens\SScen.DBF` — 16 records, header/record 221 B (closes). Fields are the
+`Scens\SScen.DBF` — 16 records, header 737 B, record 221 B (closes). Fields are the
 per-scenario container names (`NO_SCEN`, `MAP`, `ROADS`, `MISSION`, `PLAN`,
 `FORTS`, `UNITS`, `STACKS`, `PLAYERS`, `ITEMS`, `BAGS`, `SITES`, `RUINS`,
 `TOMBS`, `LMARKS`, `SPELLS`, `CASTS`, `INFO`, `HINTS`, `CRYSTALS`, `RODS`,
@@ -187,7 +187,7 @@ the *data* level, not just the path level.
 | 0x0C | 4 | zero | **V** |
 | 0x10 | 4 | zero | **V** |
 | 0x14 | 4 | zero | **V** |
-| 0x18 | 4 | near-end-of-file hint | **H** — always within a few KB of `file_size` but not equal; see Q5 |
+| 0x18 | 4 | near-end-of-file hint | **H** — always short of `file_size` by 1024..31042 bytes and never equal; see Q5 |
 
 ### `MQRC` chunks (28-byte header each)
 
@@ -345,10 +345,11 @@ container structure; the per-chunk audio codec is **H** (not decoded).
 ## 7. Music (`.wav`)
 
 25 files, all `RIFF`/`WAVE` (`report.wav[]`). 24 use WAVE format tag 17 (IMA
-ADPCM) at 22050 Hz and one is tag 1 (PCM) at 44100 Hz, all stereo. **V** — a
-small refinement of the plan's "plain `.wav`": they are WAVE files, but the
-majority are ADPCM-compressed, which only matters to a decoder, not to the
-"music needs no CD" conclusion.
+ADPCM) and one (`AMBIENT5.WAV`) is tag 1 (PCM); 24 are 22050 Hz and one
+(`AMBIEN11.WAV`) is 44100 Hz; 24 are stereo and one (`AMBIENT5.WAV`) is mono.
+**V** — a small refinement of the plan's "plain `.wav`": they are WAVE files,
+but the majority are ADPCM-compressed, which only matters to a decoder, not to
+the "music needs no CD" conclusion.
 
 ---
 
