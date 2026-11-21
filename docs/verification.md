@@ -34,8 +34,8 @@ guard only — it is neither a ticked box nor a claim about the start-up crash.
 **The start-up crash is separate and unresolved.** On 2026-11-21 the game died
 with `Exception C0000005` (write to `0x00000000`, EIP `0059559E`) after its own
 start-up log line — with `InWindow=0` **and** `InWindow=1`. Display mode is ruled
-out; the evidence and the untested candidates are in
-[`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-affects-every-recipe).
+out; the evidence and the open candidates are in
+[`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine).
 Item 1 cannot be ticked until that is resolved.
 
 ---
@@ -72,7 +72,7 @@ listed here rather than smoothed over; each one is visible to a user.
 
 | Gap | Where it bites | What would close it |
 |---|---|---|
-| **Plain-Wine start-up crashes at `0059559E` — unresolved.** The game logs its own start (`Midgard (v.2000, 6, 22, 1) started on …`) and then dies with `Exception C0000005`, write to `0x00000000`, EIP `0059559E` (a virtual call through a null member with no null check). Same fault with `InWindow=1` and `InWindow=0`; the INI rewrite itself is fine and no cnc-ddraw was staged. | **Every** user on plain Wine: v0.1.0 installs, passes `doctor`, launches, and the game dies. | Root-cause work outside this card. Tested-and-failed: `InWindow=0`, `InWindow=1`. Candidates not yet ruled out: staged cnc-ddraw, a non-wow64 Wine, another Windows version in the prefix, `DDraw=0` (GDI). Evidence in [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-affects-every-recipe). |
+| **Plain-Wine start-up crashes at `0059559E` — unresolved.** The game logs its own start (`Midgard (v.2000, 6, 22, 1) started on …`) and then dies with `Exception C0000005`, write to `0x00000000`, EIP `0059559E` (a virtual call through a null member with no null check). Same fault with `InWindow=1` and `InWindow=0`; the INI rewrite itself is fine and no cnc-ddraw was staged. | **Every** user on plain Wine: v0.1.0 installs, passes `doctor`, launches, and the game dies. | Root-cause work outside this card. Tested-and-failed: `InWindow=0`, `InWindow=1`. Candidates not yet ruled out: staged cnc-ddraw, a non-wow64 Wine, another Windows version in the prefix, `DDraw=0` (GDI). Evidence in [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine). |
 | **No one-line wrapper install.** `disciples_play.wrapper` fetches the pinned `cnc-ddraw` release and writes the preset, but no CLI subcommand calls it yet. | A new user must copy `ddraw.dll`/`ddraw.ini` into `Exe/` by hand (quickstart §"Getting the window"). Without that, `windowed=1` never engages and items 2–5 cannot pass. | A small `disciples-play wrapper --install` card (needs `--game-dir`, the digest pin, the licence text, an overwrite guard — all already implemented as functions). |
 | **Windows is unclaimed.** CI runs the suite on `windows-latest` 3.10–3.13, but no human has launched the game on Windows. | Any "works on Windows" reading of a green CI badge. | One run on a Windows machine; then update this file and the README. |
 | **cnc-ddraw's release build writes no debug log.** `dbg_init()` is behind `#ifdef _DEBUG`, so a black screen leaves no `cnc-ddraw-*.log`. | Triage of a failed item 1. | Use the `experimental-debuglog` build for one run, as [`wine-recipe.md`](wine-recipe.md) says. |

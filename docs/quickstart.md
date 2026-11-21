@@ -60,13 +60,13 @@ preset and the digest pin.
 
 > **Known: the game dies at start-up under plain Wine.** `Exception C0000005` at
 > `0059559E`, the same with `InWindow=0` and `InWindow=1`; see
-> [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-affects-every-recipe)
-> for the evidence and the untested candidates. This is unresolved in v0.1.0.
+> [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine)
+> for the evidence and the candidates. This is unresolved in v0.1.0.
 
 ## If something does not work
 
 - The window is black or never appears → [`wine-recipe.md`](wine-recipe.md) "If the screen is black".
-- The game dies at start-up with `C0000005` at `0059559E` → known and **unresolved**; [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-affects-every-recipe) lists what was tested and what was not.
+- The game dies at start-up with `C0000005` at `0059559E` → known and **unresolved**; [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine) lists what was tested and what was not.
 - A `FAIL` from `doctor` names its own fix on the same line.
 - `disciples-play data --game-dir …` prints a read-only structural report of the
   data files (documented in [`data-layout.md`](data-layout.md)).

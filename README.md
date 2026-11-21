@@ -105,10 +105,11 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 > real runs on 2026-11-21 died with `Exception C0000005` (write to `0x00000000`)
 > after the game logged its own start — with `InWindow=1` **and** with
 > `InWindow=0`, so display mode is not the cause. Tested and failed:
-> `InWindow=0`, `InWindow=1`. Candidates not yet ruled out: staged cnc-ddraw, a
-> non-wow64 Wine, a different Windows version in the prefix, `DDraw=0`. No recipe
+> `InWindow=0`, `InWindow=1`. Ruled out since: a staged cnc-ddraw (same fault)
+> and `DDraw=0` (starts, black screen). Still open: a non-wow64 Wine and a
+> different Windows version in the prefix. No recipe
 > in [`docs/wine-recipe.md`](docs/wine-recipe.md) is a fix yet; the analysis is its
-> ["Known crash at start-up"](docs/wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-affects-every-recipe)
+> ["Known crash at start-up"](docs/wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine)
 > section.
 >
 > `doctor` reports `[Disciple] InWindow` as its `ini-window` line — `PASS` for
@@ -135,7 +136,7 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
 **Verified here** (commands in [`docs/verification.md`](docs/verification.md#what-the-agents-did-verify-for-contrast)):
 
-- 224 synthetic-fixture tests pass; 2 read-only tests pass against a retail
+- 226 synthetic-fixture tests pass; 2 read-only tests pass against a retail
   install; `ruff check` and `ruff format --check` are clean.
 - CI: pytest + ruff on ubuntu-latest and windows-latest, Python 3.10, 3.11,
   3.12, 3.13, plus a `disciples-play --help` smoke test per cell.

@@ -25,7 +25,7 @@ disciples-play doctor --game-dir "/path/to/Disciples Gold"
 
 ---
 
-## Known crash at start-up: `0059559E` (unresolved, affects every recipe)
+## Known crash at start-up: `0059559E` (unresolved on plain `wine`)
 
 As of **2026-11-21** this title does not reach the main menu from this pack's
 launcher on plain Wine (wine-11.21 Staging, wow64), in **either** display mode.
@@ -57,10 +57,12 @@ Tested and **ruled out**:
 | `[Disciple] InWindow=0` (fullscreen, the retail baseline) | **crashes at `0059559E`** — same fault |
 
 Display mode is therefore not the cause, and the retail fullscreen baseline is
-not the fix. Candidates **not yet ruled out**, roughly in the order the crash
-analysis suggests: staged cnc-ddraw (`ddraw.dll` + `ddraw.ini`), a non-`wow64`
-Wine build, a different Windows version in the prefix (`winecfg` → Windows
-version), and the engine's own GDI path (`DDraw=0`).
+not the fix. Two candidates are **ruled out** by later runs under plain `wine`
+(recorded in the launch-path work): a **staged cnc-ddraw** (`ddraw.dll` +
+`ddraw.ini`) reaches the same fault, and the engine's own **GDI path**
+(`DDraw=0`) starts with sound but a black screen. Still open: a non-`wow64`
+Wine build, and a different Windows version in the prefix (`winecfg` → Windows
+version).
 
 `doctor`'s `ini-window` line is a **configuration guard, not a crash fix**: it
 warns on every `[Disciple] InWindow=1` (cnc-ddraw needs the game fullscreen,
