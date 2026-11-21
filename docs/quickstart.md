@@ -1,7 +1,9 @@
 # Quick start — three commands
 
-A clean machine with Python ≥ 3.10 and Wine installed is enough. The pack has
-**no runtime dependencies** and needs no network access at run time.
+A clean machine with Python ≥ 3.10 and a Wine-compatible runner is enough. For
+this title that runner has to be **Proton** (Heroic, Lutris) — plain `wine`
+crashes at start-up, see [`wine-recipe.md`](wine-recipe.md) "Start here". The
+pack has **no runtime dependencies** and needs no network access at run time.
 
 ```bash
 # 1. install (from a clone of this repository)
@@ -11,8 +13,10 @@ pipx install .            # if pipx is missing (Debian/Ubuntu: sudo apt install 
                           # any other installer works too, e.g. python3 -m pip install --user .
 # 2. check the install, the Wine side and the data files — one line per check
 disciples-play doctor --game-dir "$HOME/Games/Disciples Gold"
-# 3. rewrite the INI paths and play
-disciples-play --game-dir "$HOME/Games/Disciples Gold"
+# 3. rewrite the INI paths, then start the game from your PROTON runner
+disciples-play --no-launch --game-dir "$HOME/Games/Disciples Gold"
+# then press Play in Heroic / Lutris. (Plain `wine` dies at 0059559E on start-up
+# with or without the wrapper staged; see wine-recipe.md "Start here".)
 ```
 
 **Your files stay yours.** The pack only reads your installation, rewrites
@@ -57,6 +61,7 @@ preset and the digest pin.
 
 ## If something does not work
 
+- The game **crashes at start-up** (`0059559E`, access violation) under plain `wine` → it is the launch environment, not your INI: rewrite with `disciples-play --no-launch --game-dir …` and press Play in Heroic/Lutris with a Proton runner ([`wine-recipe.md`](wine-recipe.md) "Start here").
 - The window is black or the game does not start → [`wine-recipe.md`](wine-recipe.md) "If the screen is black".
 - A `FAIL` from `doctor` names its own fix on the same line.
 - `disciples-play data --game-dir …` prints a read-only structural report of the

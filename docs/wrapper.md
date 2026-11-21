@@ -9,6 +9,14 @@ already lists *Disciples* among its supported games. This module turns
 cnc-ddraw's "unzip by hand and configure per install" into three reproducible
 functions:
 
+> **Measured caveat (maintainer, 2026-11-21):** on the real GOG install the
+> staged `ddraw.dll` was **never loaded** — module dumps from every run,
+> failing and working, name `C:\windows\system32\ddraw.dll` and `wined3d.dll`.
+> So the takeover described above is unproven for this title, and the wrapper is
+> not credited with any working run. It also does not fix the plain-Wine
+> start-up crash (`0059559E`) — that is an environment problem; see
+> [`wine-recipe.md`](wine-recipe.md) "Start here".
+
 | Function | What it does |
 |---|---|
 | `build_preset(scale=3, maxfps=60, vsync=True, adjmouse=True, renderer="auto")` | Returns the text of the `ddraw.ini` preset. |
