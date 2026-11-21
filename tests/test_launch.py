@@ -100,6 +100,26 @@ def test_resolve_install_ambiguous_lists_candidates(tmp_path: Path) -> None:
     assert "one" in exc.value.message and "two" in exc.value.message
 
 
+def test_resolve_install_absolutises_relative_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_install(tmp_path / "install")
+    monkeypatch.chdir(tmp_path)
+    install = launch.resolve_install(Path("install"))
+    assert install.root == root.resolve()
+    assert install.root.is_absolute()
+
+
+def test_resolve_install_absolutises_dot_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_install(tmp_path / "install")
+    monkeypatch.chdir(root)
+    install = launch.resolve_install(Path("."))
+    assert install.root == root.resolve()
+    assert install.root.is_absolute()
+
+
 def test_wrapper_staged_is_case_insensitive(tmp_path: Path) -> None:
     root = make_install(tmp_path / "game")
     exe_dir = root / "Exe"
@@ -210,3 +230,15 @@ def test_apply_rewrite_copy_tree_leaves_original_pristine(
     assert result.install.root == copy_root
     rewritten = (copy_root / "Exe" / "DISCIPLE.INI").read_text()
     assert ini.to_windows_path(str(copy_root)) + "\\Globals" in rewritten
+
+
+def test_apply_rewrite_non_cp1252_path_raises_exit_3(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(ini.shutil, "which", lambda name: None)
+    root = make_install(tmp_path / "gra-\u0142\u00f3d\u017a")  # Polish, not cp1252
+    install = launch.resolve_install(root)
+    with pytest.raises(launch.CliError) as exc:
+        launch.apply_rewrite(install, "wine", "inplace")
+    assert exc.value.exit_code == 3
+    assert "cannot rewrite" in exc.value.message

@@ -194,6 +194,28 @@ def test_nested_install_two_levels_resolves(tmp_path: Path, capsys) -> None:
     assert shlex.split(out) == ["wine", str(inner / "Exe" / "Disciple.exe")]
 
 
+def test_relative_game_dir_produces_absolute_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_install(tmp_path / "install")
+    monkeypatch.chdir(tmp_path)
+    assert main(["--game-dir", "install", "--ini-mode", "inplace", "--no-launch"]) == 0
+    rewritten = (root / "Exe" / "DISCIPLE.INI").read_text()
+    assert "globals=" + ini.to_windows_path(str(root.resolve())) + "\\Globals" in rewritten
+    assert "Z:\\.\\" not in rewritten  # the D1 defect: a relative root leaking into values
+
+
+def test_dot_game_dir_produces_absolute_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_install(tmp_path / "install")
+    monkeypatch.chdir(root)
+    assert main(["--game-dir", ".", "--ini-mode", "inplace", "--no-launch"]) == 0
+    rewritten = (root / "Exe" / "DISCIPLE.INI").read_text()
+    assert "globals=" + ini.to_windows_path(str(root.resolve())) + "\\Globals" in rewritten
+    assert "Z:\\.\\" not in rewritten
+
+
 def test_missing_exe_exit_2(tmp_path: Path, capsys) -> None:
     empty = tmp_path / "empty"
     empty.mkdir()
@@ -235,6 +257,14 @@ def test_unwritable_ini_exit_3(tmp_path: Path, capsys) -> None:
         assert "cannot rewrite" in capsys.readouterr().err
     finally:
         ini_path.chmod(0o644)
+
+
+def test_non_ascii_install_path_exit_3(tmp_path: Path, capsys) -> None:
+    root = make_install(tmp_path / "gra-\u0142\u00f3d\u017a")  # Polish, not cp1252
+    assert main(["--game-dir", str(root), "--ini-mode", "inplace", "--no-launch"]) == 3
+    err = capsys.readouterr().err
+    assert "cannot rewrite" in err
+    assert "cp1252" in err
 
 
 def test_missing_wine_exit_4(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:

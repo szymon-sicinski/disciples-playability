@@ -120,9 +120,15 @@ def find_ini(exe_dir: Path) -> Path | None:
 def resolve_install(candidate: Path) -> Install:
     """Resolve ``candidate`` to a game install, or raise ``CliError`` (exit 2).
 
+    The candidate is absolutised first: a relative ``--game-dir`` (``.`` or a
+    bare folder name) must resolve to the install's real location, or the
+    rewritten Windows paths would point at ``Z:\\.\\Globals`` and the tool would
+    report "rewrote 21 keys" against a directory that does not exist.
+
     The message lists exactly what was searched, so "missing" is never reported
     because of a nesting level the user did not account for.
     """
+    candidate = Path(candidate).resolve()
     if not candidate.is_dir():
         raise CliError(2, f"not a directory: {candidate}")
 
@@ -187,6 +193,26 @@ def _copy_install_tree(install: Install) -> Install:
     return Install(root=dst, exe_dir=dst / "Exe", ini_path=copied_ini)
 
 
+def _write_or_refuse(path: Path, text: str, mode: str) -> None:
+    """Write the rewritten INI, mapping write/encode failures to exit 3.
+
+    ``write_ini`` encodes cp1252, so a POSIX install path that contains a
+    character the game's code page cannot represent (Polish ``\u0142``, Cyrillic,
+    ...) raises ``UnicodeEncodeError`` rather than ``OSError``. Both are
+    "rewrite refused", the documented exit 3 -- never a traceback.
+    """
+    try:
+        ini.write_ini(path, text, mode=mode)
+    except UnicodeEncodeError as exc:
+        raise CliError(
+            3,
+            f"cannot rewrite {path}: the install path contains characters the "
+            f"game's cp1252 INI cannot represent ({exc})",
+        ) from exc
+    except OSError as exc:
+        raise CliError(3, f"cannot rewrite {path}: {exc}") from exc
+
+
 def apply_rewrite(install: Install, path_style: str, ini_mode: str) -> Rewrite:
     """Rewrite the install's INI in place and return the result.
 
@@ -203,20 +229,14 @@ def apply_rewrite(install: Install, path_style: str, ini_mode: str) -> Rewrite:
         before = ini.read_ini(target.ini_path)
         after = ini.rewrite_installation_paths(before, target.root, path_style)
         changed = ini.rewritten_key_count(before, after)
-        try:
-            ini.write_ini(target.ini_path, after, mode="inplace")
-        except OSError as exc:
-            raise CliError(3, f"cannot rewrite {target.ini_path}: {exc}") from exc
+        _write_or_refuse(target.ini_path, after, "inplace")
     else:
         before = ini.read_ini(install.ini_path)
         after = ini.rewrite_installation_paths(before, install.root, path_style)
         changed = ini.rewritten_key_count(before, after)
         if ini_mode == "backup":
             backup_path = Path(str(install.ini_path) + ".orig")
-        try:
-            ini.write_ini(install.ini_path, after, mode=ini_mode)
-        except OSError as exc:
-            raise CliError(3, f"cannot rewrite {install.ini_path}: {exc}") from exc
+        _write_or_refuse(install.ini_path, after, ini_mode)
 
     return Rewrite(
         install=target,
@@ -327,6 +347,9 @@ def build_launch(install: Install, wine_name: str, verbose: bool) -> LaunchComma
         wine_name=wine_name,
         wine_path=resolve_wine(wine_name),
         exe_path=install.exe_path,
+        # The game resolves fonts and data modules against its working
+        # directory (the R1 in-game evidence: a mismatched run failed with
+        # "unable to load fonts"); Exe/ is the known-good baseline.
         cwd=install.exe_dir,
         env=build_env(install, verbose),
     )
