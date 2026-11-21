@@ -4,6 +4,7 @@
 |---|---|---|
 | [`plans/00-playability-plan.md`](plans/00-playability-plan.md) | The specification: measured facts, scope, card graph, budget, risks, and the human verification checklist. Committed verbatim. | M0 |
 | [`development.md`](development.md) | Commit signing (and the one unsigned commit), the local check loop, the rules that bite. | M0 |
+| [`cli.md`](cli.md) | The launcher CLI: usage, install resolution, the rewrite modes, the launch environment and the exit-code contract. | M2 |
 | [`wrapper.md`](wrapper.md) | The cnc-ddraw wrapper: the preset, the pinned fetch, install-time overwrite protection, the Wine override and the debug-log path. | M3 |
 | `quickstart.md` | Three commands: install, `doctor`, play. | M6 |
 | `wine-recipe.md` | Reproducible prefix recipes — plain `wine`, Bottles, Heroic/Proton. | M4 |

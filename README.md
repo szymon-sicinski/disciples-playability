@@ -8,9 +8,11 @@ This repository ships **no game data and never will**: no `Disciple.exe`, no
 `.DBF`/`.dbi` tables, no art, audio, video or save files. It is software that
 operates on an installation **you already own**.
 
-> **Status: scaffold only (milestone M0).** The package installs, the CLI stub
-> answers `--help`, and CI runs on Linux and Windows. The INI rewriter, the
-> launcher and the cnc-ddraw preset are the next milestone — see the plan in
+> **Status: launcher implemented (M1–M2).** The INI rewriter (`disciples_play.ini`)
+> and the launcher CLI (`disciples-play --game-dir …`) are implemented and tested
+> on synthetic fixtures. The cnc-ddraw preset (M3) and the `doctor` subcommand
+> (M4) are next. No agent here can launch the game, so every "it plays" claim
+> remains a human check — see the plan in
 > [`docs/plans/00-playability-plan.md`](docs/plans/00-playability-plan.md).
 
 ## What the pack is
@@ -60,15 +62,16 @@ pip install -e ".[dev]"
 disciples-play --help
 ```
 
-The commands that matter are **not implemented yet** — M1–M4 add them:
+The commands that matter, implemented today (M1–M2):
 
 ```bash
-disciples-play doctor --game-dir "/path/to/Disciples Gold"   # M4
-disciples-play --game-dir "/path/to/Disciples Gold" --dry-run # M2
-disciples-play --game-dir "/path/to/Disciples Gold"           # M2
+disciples-play --game-dir "/path/to/Disciples Gold" --dry-run   # show the rewrite + command
+disciples-play --game-dir "/path/to/Disciples Gold"             # fix the INI and launch
+disciples-play --game-dir "/path/to/Disciples Gold" --print-command
 ```
 
-Until then the CLI prints a stub message and exits 0.
+Still to come: the cnc-ddraw preset (`--install-wrapper`, M3) and `doctor`
+(M4). See [`docs/cli.md`](docs/cli.md) for the full CLI and exit-code contract.
 
 ## Repository layout
 
