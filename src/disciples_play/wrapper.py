@@ -1,0 +1,459 @@
+"""cnc-ddraw preset, pinned fetch and wrapper installation.
+
+Disciples: Sacred Lands Gold does not import DirectDraw itself:
+``HA312W32.DLL`` and ``SHW32.DLL`` call ``LoadLibrary("ddraw.dll")`` by name,
+so a ``ddraw.dll`` dropped next to ``Disciple.exe`` -- together with
+``WINEDLLOVERRIDES="ddraw=n,b"`` -- owns the entire graphics layer. `cnc-ddraw
+<https://github.com/FunkyFr3sh/cnc-ddraw>`_ (MIT) supplies that DLL and the
+windowed, upscaled presentation the pack wants.
+
+This module turns the hand-unzip-and-configure dance into three reproducible
+pieces:
+
+* :func:`build_preset` -- the ``ddraw.ini`` the plan calls "the preset".
+* :func:`fetch_wrapper` -- download (or hand in) the pinned release zip, verify
+  its SHA-256 *before* touching anything, and extract only the files we ship.
+* :func:`install_wrapper` -- copy the DLL and write the preset into a game
+  directory, refusing to clobber a DLL we did not write and backing up any
+  ``ddraw.ini`` the user edited.
+
+The binary is never vendored in this repository: it is fetched from the pinned
+tag and checked against a digest that was measured once and recorded in
+``third_party/cnc-ddraw-PROVENANCE.md``. The upstream MIT licence text ships as
+``third_party/cnc-ddraw-LICENSE.txt``.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import io
+import json
+import logging
+import os
+import re
+import shutil
+import urllib.error
+import urllib.parse
+import urllib.request
+import zipfile
+from dataclasses import dataclass
+from pathlib import Path
+
+from . import __version__
+
+__all__ = [
+    "ALLOWED_KEYS",
+    "CNC_DDRAW_ASSET",
+    "CNC_DDRAW_REPO",
+    "CNC_DDRAW_SHA256",
+    "CNC_DDRAW_TAG",
+    "CNC_DDRAW_URL",
+    "InstallResult",
+    "PRESET_KEYS",
+    "WrapperError",
+    "WrapperFetchError",
+    "WrapperInstallError",
+    "build_preset",
+    "fetch_wrapper",
+    "install_wrapper",
+]
+
+logger = logging.getLogger(__name__)
+
+#: Upstream repository and pinned release. The digest is the SHA-256 of the
+#: release asset, measured 2026-11-21 against the real ``v7.1.0.0`` zip (see
+#: ``third_party/cnc-ddraw-PROVENANCE.md``). This is a third_party archive
+#: digest, not a game hash.
+CNC_DDRAW_REPO = "FunkyFr3sh/cnc-ddraw"
+CNC_DDRAW_TAG = "v7.1.0.0"
+CNC_DDRAW_ASSET = "cnc-ddraw.zip"
+CNC_DDRAW_SIZE = 2_688_079
+CNC_DDRAW_URL = (
+    f"https://github.com/{CNC_DDRAW_REPO}/releases/download/{CNC_DDRAW_TAG}/{CNC_DDRAW_ASSET}"
+)
+CNC_DDRAW_SHA256 = (
+    "0b13ab89a64c9918189b1dadd449ef6ed3cb3b7b19cabd96d8adbd95505bb908"  # third_party digest
+)
+
+#: Every key this preset is allowed to write. Each name was verified against
+#: upstream ``src/config.c`` at tag ``v7.1.0.0`` (``GET_BOOL``/``GET_INT``/
+#: ``GET_STRING`` calls); nothing else may appear in the preset.
+ALLOWED_KEYS = frozenset(
+    {
+        "windowed",
+        "maintas",
+        "boxing",
+        "aspect_ratio",
+        "maxfps",
+        "vsync",
+        "adjmouse",
+        "renderer",
+        "shader",
+        "savesettings",
+        "singlecpu",
+        "noactivateapp",
+        "nonexclusive",
+        "hook",
+        "border",
+        "resizable",
+        "center_window",
+        "inject_resolution",
+    }
+)
+
+#: The keys the preset actually writes -- the plan's preset, nothing more.
+PRESET_KEYS = frozenset(
+    {
+        "windowed",
+        "maintas",
+        "maxfps",
+        "vsync",
+        "adjmouse",
+        "savesettings",
+        "nonexclusive",
+        "hook",
+        "renderer",
+    }
+)
+
+#: Values ``renderer`` accepts (upstream ``src/config.c`` documents ``auto``,
+#: ``opengl``, ``gdi``, ``direct3d9``; ``auto`` tries direct3d9/opengl and
+#: falls back to gdi).
+_RENDERERS = frozenset({"auto", "gdi", "opengl", "direct3d9"})
+
+#: The game's fixed internal resolution, used to state the target upscale.
+_BASE_WIDTH = 640
+_BASE_HEIGHT = 480
+
+#: Marker file recording the digest of the ``ddraw.dll`` this pack installed.
+_MARKER_FILENAME = ".disciples-play-wrapper.json"
+
+#: Zip entries we copy out of the release archive. Everything else (the config
+#: GUI, the shader packs) is deliberately skipped.
+_WANTED_FILES = frozenset({"ddraw.dll", "ddraw.ini"})
+
+#: Filename prefixes treated as "LICENSE-ish" (case-insensitive), so the
+#: licence/notice travels with the wrapper when upstream ships one in the zip.
+_LEGAL_PREFIXES = ("license", "copying", "notice")
+
+#: Hosts a release-asset download may resolve to. GitHub redirects the release
+#: URL to its asset CDN; anything outside this set is refused.
+_ALLOWED_DOWNLOAD_HOSTS = frozenset(
+    {
+        "github.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+        "codeload.github.com",
+        "raw.githubusercontent.com",
+    }
+)
+
+_USER_AGENT = f"disciples-play/{__version__}"
+_DOWNLOAD_TIMEOUT = 60.0
+
+
+class WrapperError(Exception):
+    """Base error for the cnc-ddraw wrapper."""
+
+
+class WrapperFetchError(WrapperError):
+    """Download, digest or extraction of the release archive failed."""
+
+
+class WrapperInstallError(WrapperError):
+    """The wrapper refused to write into the game directory."""
+
+
+@dataclass(frozen=True)
+class InstallResult:
+    """What :func:`install_wrapper` wrote, and what it had to protect first."""
+
+    ddraw_dll: Path
+    ddraw_ini: Path
+    marker: Path
+    ini_backed_up: bool
+    ini_written: bool
+
+
+def build_preset(
+    scale: int = 3,
+    maxfps: int = 60,
+    vsync: bool = True,
+    adjmouse: bool = True,
+    renderer: str = "auto",
+) -> str:
+    """Return the ``ddraw.ini`` preset for Disciples: Sacred Lands Gold.
+
+    The preset pins the plan's nine keys and nothing else: ``windowed=1``,
+    ``maintas=1``, ``maxfps``, ``vsync``, ``adjmouse``, ``savesettings=1``,
+    ``nonexclusive=1``, ``hook=1`` and ``renderer``. A leading comment block
+    names the pack version, the cnc-ddraw tag and the two hotkeys a user needs
+    (Alt+Enter toggles, Ctrl+Tab releases the cursor).
+
+    ``scale`` is the plan's target integer upscale (3 -> 1920x1440). Upstream
+    has no ``scale=`` key: the scaling itself comes from ``windowed=1`` plus
+    ``maintas=1`` (aspect-preserving) as the user resizes the window, so
+    ``scale`` is recorded in the comment header as the documented target and
+    used only for that. ``boxing=true`` (integer scaling) or
+    ``shader=Nearest neighbor`` are the crisp-pixel knobs; see
+    ``docs/wrapper.md``.
+
+    Every key written is one upstream actually reads (``src/config.c``); booleans
+    are emitted as ``1``/``0``, which upstream's ``cfg_get_bool`` accepts.
+    """
+    _check_scale(scale)
+    if isinstance(maxfps, bool) or not isinstance(maxfps, int) or maxfps < -1:
+        raise ValueError(f"maxfps must be an int >= -1, got {maxfps!r}")
+    if renderer not in _RENDERERS:
+        raise ValueError(f"unknown renderer {renderer!r}; expected one of {sorted(_RENDERERS)}")
+
+    width, height = _BASE_WIDTH * scale, _BASE_HEIGHT * scale
+    header = (
+        "; cnc-ddraw preset for Disciples: Sacred Lands Gold\n"
+        f"; generated by disciples-play {__version__}\n"
+        f"; cnc-ddraw {CNC_DDRAW_TAG} (MIT) - https://github.com/{CNC_DDRAW_REPO}\n"
+        ";\n"
+        "; The game must stay in fullscreen mode (its own InWindow=0); windowed\n"
+        "; presentation comes from this wrapper, not from the game.\n"
+        f"; Target upscale: {scale}x ({width}x{height}). Resize the window to taste.\n"
+        "; Hotkeys: Alt+Enter toggles windowed/fullscreen, Ctrl+Tab releases the cursor.\n"
+        "\n"
+        "[ddraw]\n"
+    )
+    body = "".join(
+        [
+            "windowed=1\n",
+            "maintas=1\n",
+            f"maxfps={maxfps}\n",
+            f"vsync={_bool(vsync)}\n",
+            f"adjmouse={_bool(adjmouse)}\n",
+            "savesettings=1\n",
+            "nonexclusive=1\n",
+            "hook=1\n",
+            f"renderer={renderer}\n",
+        ]
+    )
+    return header + body
+
+
+def fetch_wrapper(
+    dest: str | os.PathLike[str],
+    tag: str = CNC_DDRAW_TAG,
+    expected_sha256: str = CNC_DDRAW_SHA256,
+    offline_zip: str | os.PathLike[str] | None = None,
+) -> list[str]:
+    """Fetch the pinned cnc-ddraw release and stage the files we ship.
+
+    The release asset is downloaded with :mod:`urllib` (or read from
+    ``offline_zip`` for air-gapped machines) and its SHA-256 is verified
+    *before* anything is extracted; a mismatch, a failed download or a redirect
+    to a non-GitHub host raises :class:`WrapperFetchError`. Only ``ddraw.dll``,
+    ``ddraw.ini`` and LICENSE-ish files are extracted into ``dest`` (created
+    only after verification), with path-traversal entries (``..``, absolute)
+    rejected.
+
+    Returns the list of entry names written, relative to the archive.
+    """
+    if not isinstance(expected_sha256, str) or not expected_sha256:
+        raise ValueError("expected_sha256 is required (64-hex SHA-256 of the release zip)")
+
+    if offline_zip is not None:
+        try:
+            data = Path(offline_zip).read_bytes()
+        except OSError as exc:
+            raise WrapperFetchError(f"cannot read offline zip {offline_zip!r}: {exc}") from exc
+    else:
+        data, _ = _download(_release_url(tag))
+
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != expected_sha256.lower():
+        raise WrapperFetchError(
+            f"SHA-256 mismatch for cnc-ddraw {tag}: "
+            f"expected {expected_sha256.lower()}, got {digest} (download refused, nothing extracted)"
+        )
+
+    return _extract(data, Path(dest))
+
+
+def install_wrapper(
+    game_dir: str | os.PathLike[str],
+    staging: str | os.PathLike[str],
+) -> InstallResult:
+    """Install the staged wrapper into ``game_dir`` on an explicit call only.
+
+    * ``ddraw.dll`` is copied from ``staging``. An existing ``ddraw.dll`` that
+      was not written by this pack -- judged by comparing its SHA-256 against
+      the marker file ``.disciples-play-wrapper.json`` -- is refused with
+      :class:`WrapperInstallError`; our own file is overwritten freely.
+    * ``ddraw.ini`` is written from :func:`build_preset`. A file that differs
+      from the preset is treated as user-edited: it is backed up to
+      ``ddraw.ini.pre-pack`` (created once, never overwritten) before ours is
+      written. A byte-identical file is left untouched.
+    """
+    game_dir = Path(game_dir)
+    staging = Path(staging)
+
+    dll_src = staging / "ddraw.dll"
+    if not dll_src.is_file():
+        raise WrapperInstallError(f"staging directory has no ddraw.dll: {staging}")
+
+    new_digest = _sha256_file(dll_src)
+    target_dll = game_dir / "ddraw.dll"
+    marker = game_dir / _MARKER_FILENAME
+
+    if target_dll.exists():
+        current_digest = _sha256_file(target_dll)
+        recorded = _read_marker(marker)
+        if recorded is None or recorded.get("ddraw_dll_sha256") != current_digest:
+            raise WrapperInstallError(
+                f"refusing to overwrite {target_dll}: it was not written by this pack. "
+                "Move it away (or delete it) and re-run."
+            )
+
+    game_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(dll_src, target_dll)
+    _write_marker(marker, new_digest)
+    logger.info("installed ddraw.dll into %s", game_dir)
+
+    ini_backed_up, ini_written = _install_ini(game_dir / "ddraw.ini", build_preset())
+    return InstallResult(
+        ddraw_dll=target_dll,
+        ddraw_ini=game_dir / "ddraw.ini",
+        marker=marker,
+        ini_backed_up=ini_backed_up,
+        ini_written=ini_written,
+    )
+
+
+# --- helpers ---------------------------------------------------------------
+
+
+def _check_scale(scale: int) -> None:
+    if isinstance(scale, bool) or not isinstance(scale, int) or scale < 1:
+        raise ValueError(f"scale must be a positive int, got {scale!r}")
+
+
+def _bool(value: bool) -> str:
+    return "1" if value else "0"
+
+
+def _release_url(tag: str) -> str:
+    return f"https://github.com/{CNC_DDRAW_REPO}/releases/download/{tag}/{CNC_DDRAW_ASSET}"
+
+
+def _download(url: str) -> tuple[bytes, str]:
+    """Download ``url`` following only GitHub hosts; return ``(bytes, final_url)``."""
+    opener = urllib.request.build_opener(_HostAllowlistRedirectHandler())
+    request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+    try:
+        with opener.open(request, timeout=_DOWNLOAD_TIMEOUT) as response:
+            return response.read(), response.geturl()
+    except (urllib.error.URLError, OSError) as exc:
+        raise WrapperFetchError(f"failed to download {url}: {exc}") from exc
+
+
+def _is_allowed_host(url: str) -> bool:
+    """True when ``url``'s host is one of GitHub's download hosts."""
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    return host in _ALLOWED_DOWNLOAD_HOSTS
+
+
+class _HostAllowlistRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Follow redirects only within GitHub's download hosts."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not _is_allowed_host(newurl):
+            host = urllib.parse.urlsplit(newurl).hostname or "(none)"
+            raise WrapperFetchError(f"refusing to follow redirect to non-GitHub host {host!r}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _extract(data: bytes, dest: Path) -> list[str]:
+    """Extract the wanted entries from ``data`` into ``dest``, safely."""
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile as exc:
+        raise WrapperFetchError(f"release asset is not a valid zip: {exc}") from exc
+
+    extracted: list[str] = []
+    with archive:
+        for member in archive.infolist():
+            name = member.filename
+            if name.endswith(("/", "\\")):
+                continue  # directory entry
+            # Validate the path of every file entry, wanted or not: a zip-slip
+            # entry must be rejected, never silently skipped.
+            target = _safe_target(dest, name)
+            base = name.replace("\\", "/").rsplit("/", 1)[-1].lower()
+            if base not in _WANTED_FILES and not base.startswith(_LEGAL_PREFIXES):
+                continue
+            dest.mkdir(parents=True, exist_ok=True)
+            with archive.open(member) as src, target.open("wb") as out:
+                shutil.copyfileobj(src, out)
+            extracted.append(name)
+    return extracted
+
+
+def _safe_target(dest: Path, name: str) -> Path:
+    """Map a zip entry name to a path inside ``dest``, rejecting traversal."""
+    normalized = name.replace("\\", "/")
+    if normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
+        raise WrapperFetchError(f"refusing absolute zip entry {name!r}")
+    parts = normalized.split("/")
+    if ".." in parts:
+        raise WrapperFetchError(f"refusing path-traversal zip entry {name!r}")
+    clean = [part for part in parts if part not in ("", ".")]
+    if not clean:
+        raise WrapperFetchError(f"refusing empty zip entry {name!r}")
+    target = dest.joinpath(*clean).resolve()
+    if target != dest.resolve() and dest.resolve() not in target.parents:
+        raise WrapperFetchError(f"refusing zip entry escaping destination: {name!r}")
+    return target
+
+
+def _install_ini(target: Path, text: str) -> tuple[bool, bool]:
+    """Write ``text`` to ``target``, backing up a differing file once.
+
+    Returns ``(ini_backed_up, ini_written)``. A byte-identical file is left
+    untouched; a differing one is copied to ``<target>.pre-pack`` first (only
+    if that backup does not already exist, matching the INI model's ``.orig``
+    convention).
+    """
+    new_bytes = text.encode("utf-8")
+    if target.exists():
+        if target.read_bytes() == new_bytes:
+            return False, False
+        backup = Path(str(target) + ".pre-pack")
+        backed_up = False
+        if not backup.exists():
+            shutil.copyfile(target, backup)
+            backed_up = True
+        target.write_bytes(new_bytes)
+        return backed_up, True
+    target.write_bytes(new_bytes)
+    return False, True
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _read_marker(path: Path) -> dict | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _write_marker(path: Path, digest: str) -> None:
+    payload = {
+        "ddraw_dll_sha256": digest,
+        "cnc_ddraw_tag": CNC_DDRAW_TAG,
+        "pack_version": __version__,
+    }
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
