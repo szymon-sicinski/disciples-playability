@@ -335,9 +335,14 @@ def test_resolve_exe_dir_refuses_a_mixed_tree_naming_both_paths(tmp_path: Path) 
     (root / "Disciple.exe").write_bytes(b"MZ")
     (exe_dir / "DISCIPLE.INI").write_text("[Installation]\n", encoding="cp1252")
 
-    def snapshot() -> list[tuple[str, int]]:
+    def snapshot() -> list[tuple[str, int, str]]:
+        # size catches appends, the digest catches an equal-length rewrite
         return sorted(
-            (p.relative_to(root).as_posix(), p.stat().st_size)
+            (
+                p.relative_to(root).as_posix(),
+                p.stat().st_size,
+                hashlib.sha256(p.read_bytes()).hexdigest(),
+            )
             for p in root.rglob("*")
             if p.is_file()
         )

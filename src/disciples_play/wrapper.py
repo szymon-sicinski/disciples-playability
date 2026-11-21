@@ -136,7 +136,7 @@ _MARKER_FILENAME = ".disciples-play-wrapper.json"
 #: from: ``HA312W32.DLL`` calls ``LoadLibrary("ddraw.dll")``, which resolves
 #: against the running executable's directory. Spelled and matched as
 #: :func:`disciples_play.launch.resolve_install` finds it, so the names match.
-#: The two differ by design on a mixed tree: ``launch`` picks ``Exe/`` silently,
+#: The two differ by design on an ambiguous tree: ``launch`` picks ``Exe/`` silently,
 #: :func:`resolve_exe_dir` refuses it rather than installing in either place.
 _EXE_NAME = "Disciple.exe"
 
@@ -319,8 +319,8 @@ def resolve_exe_dir(target: str | os.PathLike[str]) -> Path:
     * ``target/Exe/Disciple.exe`` exists -> ``target/Exe``, i.e. the install
       root that :func:`disciples_play.launch.resolve_install` hands out.
 
-    A *mixed* tree -- ``target`` holds ``Disciple.exe`` **and**
-    ``target/Exe/Disciple.exe`` -- is ambiguous and raises
+    An *ambiguous* tree -- ``target`` holds ``Disciple.exe`` **and**
+    ``target/Exe/Disciple.exe`` -- raises
     :class:`WrapperInstallError` naming both paths. Preferring ``target`` would
     install the wrapper in the root while ``launch`` uses ``<root>/Exe`` as the
     exe directory and looks for ``ddraw.dll`` there, leaving it inert; guessing
@@ -365,8 +365,8 @@ def install_wrapper(
     the destination is always resolved to the executable's directory first, so
     the install root cannot become a home for a DLL the launcher will never
     load. A directory that holds ``Disciple.exe`` in neither shape raises
-    :class:`WrapperInstallError` and nothing is written, and so does a *mixed*
-    tree -- the executable in both the root and ``Exe/`` -- because
+    :class:`WrapperInstallError` and nothing is written, and so does an
+    *ambiguous* tree -- the executable in both the root and ``Exe/`` -- because
     :func:`resolve_exe_dir` refuses the ambiguity rather than guessing.
 
     * ``ddraw.dll`` is copied from ``staging``. An existing ``ddraw.dll`` that

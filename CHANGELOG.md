@@ -66,9 +66,12 @@ those eleven items are ticked.
 
 - `wrapper.install_wrapper()` no longer writes into whatever path it is given.
   The destination is resolved to the directory holding `Disciple.exe` — the
-  install root is accepted and resolved to its `Exe/`, and a path with no
+  install root is accepted and resolved to its `Exe/`, a path with no
   `Disciple.exe` under it raises `WrapperInstallError` instead of silently
-  leaving a `ddraw.dll` where neither the launcher nor `doctor` looks.
+  leaving a `ddraw.dll` where neither the launcher nor `doctor` looks, and a
+  tree holding `Disciple.exe` in **both** the root and `Exe/` is refused the
+  same way, naming both paths — guessing would install the wrapper where the
+  launcher never loads from.
 - CLI tests no longer read the developer's exported `$DISCIPLES_GAME_DIR` or
   per-user config; every test runs against a throwaway home.
 - A top-level `--game-dir` now reaches the `data` subcommand, and `doctor` and
