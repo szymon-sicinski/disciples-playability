@@ -18,6 +18,9 @@ DBASE3 = 0x03
 FIELD_DESCRIPTOR = 32
 FIELD_TERMINATOR = 0x0D
 EOF_MARKER = 0x1A
+#: dBase III deletion-flag bytes: 0x20 space = live, 0x2A ``*`` = deleted.
+LIVE_FLAG = 0x20
+DELETED_FLAG = 0x2A
 
 
 def _field_descriptor(name: str, ftype: str, length: int) -> bytes:
@@ -36,18 +39,24 @@ def build_dbf(
     year: int = 99,
     month: int = 1,
     day: int = 1,
+    deleted: tuple[int, ...] = (),
 ) -> bytes:
     """Build a synthetic dBase III file whose header arithmetic closes.
 
     ``fields`` is a list of ``(name, type, length)``; ``records`` is a list of
-    record blobs, each ``record_len`` bytes.  The returned bytes tile the file
-    exactly: ``header_len + records*record_len + 1 == len(result)``.
+    field-value blobs, each ``sum(field lengths)`` bytes.  The builder prepends
+    the 1-byte deletion flag to each record, so ``record_len == 1 + sum(field
+    lengths)`` exactly as in a real dBase III file.  ``deleted`` names the
+    record indices whose flag is ``*`` (0x2A); the rest are live (0x20).  The
+    returned bytes tile the file exactly: ``header_len + records*record_len +
+    1 == len(result)``.
     """
 
-    record_len = sum(length for _, _, length in fields)
+    field_total = sum(length for _, _, length in fields)
+    record_len = 1 + field_total
     for rec in records:
-        if len(rec) != record_len:
-            raise ValueError(f"record length {len(rec)} != {record_len}")
+        if len(rec) != field_total:
+            raise ValueError(f"field-value length {len(rec)} != {field_total}")
     header_len = 32 + len(fields) * FIELD_DESCRIPTOR + 1
 
     out = bytearray()
@@ -62,7 +71,8 @@ def build_dbf(
     for name, ftype, length in fields:
         out += _field_descriptor(name, ftype, length)
     out.append(FIELD_TERMINATOR)
-    for rec in records:
+    for i, rec in enumerate(records):
+        out.append(DELETED_FLAG if i in deleted else LIVE_FLAG)
         out += rec
     out.append(EOF_MARKER)
     return bytes(out)

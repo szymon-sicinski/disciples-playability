@@ -65,9 +65,12 @@ def _dbf_reports(game_dir: Path) -> list[dict]:
         sub = game_dir / d
         if not sub.is_dir():
             continue
-        for p in sorted(sub.glob("*.DBF")) + sorted(sub.glob("*.dbf")):
-            if p.is_file():
-                reports.append(summarize_dbf(p))
+        # Single iterdir pass filtered on the lower-cased suffix: globbing both
+        # "*.DBF" and "*.dbf" would double-count every table on a
+        # case-insensitive filesystem (Windows CI), and any non-DBF file is
+        # reported per-file by summarize_dbf instead of aborting the run.
+        for p in sorted(p for p in sub.iterdir() if p.is_file() and p.suffix.lower() == ".dbf"):
+            reports.append(summarize_dbf(p))
     return reports
 
 
@@ -205,14 +208,21 @@ def _wav_report(path: Path) -> dict:
     }
 
 
-def _dbf_column_values(path: Path, column: str) -> list[str]:
-    """Read a named ``.DBF`` column as stripped strings (empty list if absent)."""
+def _dbf_column_values(path: Path, column: str, *, skip_deleted: bool = True) -> list[str] | None:
+    """Read a named ``.DBF`` column as stripped strings.
+
+    Returns ``None`` when the file cannot be read or the column does not exist,
+    so the caller can distinguish "no such field" from "column present but
+    empty" instead of silently rendering a missing column as zero references.
+    """
 
     try:
         header, records = read_dbf(path)
     except (ValueError, OSError):
-        return []
-    return column_values(header, records, column)
+        return None
+    if column not in {f.name for f in header.fields}:
+        return None
+    return column_values(header, records, column, skip_deleted=skip_deleted)
 
 
 def _cross_reference_report(game_dir: Path) -> dict:
@@ -221,6 +231,8 @@ def _cross_reference_report(game_dir: Path) -> dict:
     Reads only the ID columns, never the text body: the report states how many
     ``*_TXT`` references in the named tables resolve to a ``TXT_ID`` in
     ``Tglobal.dbf``, and how many ``RACE_ID`` values resolve to ``GRACE``.
+    Resolution counts *live* (non-deleted) rows only; records flagged deleted
+    are excluded because their deletion flag marks them as not live data.
     """
 
     def _resolve(ref: str, keys: set[str]) -> bool:
@@ -228,14 +240,32 @@ def _cross_reference_report(game_dir: Path) -> dict:
 
     tglobal = game_dir / "Globals" / "Tglobal.dbf"
     text_ids: set[str] = set()
+    text_id_distinct_all: int | None = None
     if tglobal.is_file():
-        text_ids = {v.lower() for v in _dbf_column_values(tglobal, "TXT_ID") if v}
+        live = _dbf_column_values(tglobal, "TXT_ID")
+        text_ids = {v.lower() for v in (live or []) if v}
+        all_rows = _dbf_column_values(tglobal, "TXT_ID", skip_deleted=False)
+        text_id_distinct_all = len({v.lower() for v in (all_rows or []) if v})
 
     def _text_link(table: str, field: str) -> dict:
         values = _dbf_column_values(game_dir / "Globals" / table, field)
+        if values is None:
+            return {
+                "table": table,
+                "field": field,
+                "field_missing": True,
+                "nonempty": None,
+                "resolved": None,
+            }
         nonempty = [v for v in values if v]
-        resolved = sum(1 for v in nonempty if _resolve(_strip_count_prefix(v), text_ids))
-        return {"table": table, "field": field, "nonempty": len(nonempty), "resolved": resolved}
+        resolved = sum(1 for v in nonempty if _resolve(v, text_ids))
+        return {
+            "table": table,
+            "field": field,
+            "field_missing": False,
+            "nonempty": len(nonempty),
+            "resolved": resolved,
+        }
 
     links = []
     for table, field in (
@@ -252,38 +282,36 @@ def _cross_reference_report(game_dir: Path) -> dict:
     grace = game_dir / "Globals" / "GRACE.DBF"
     race_link = None
     if grace.is_file():
-        race_ids = {v.lower() for v in _dbf_column_values(grace, "RACE_ID") if v}
-        unit_races = [
-            _strip_count_prefix(v).lower()
-            for v in _dbf_column_values(game_dir / "Globals" / "GUNITS.DBF", "RACE_ID")
-            if v
-        ]
-        resolved = sum(1 for v in unit_races if v in race_ids)
-        race_link = {
-            "table": "GUNITS.DBF",
-            "field": "RACE_ID",
-            "target": "GRACE.DBF.RACE_ID",
-            "nonempty": len(unit_races),
-            "resolved": resolved,
-        }
+        race_ids = {v.lower() for v in (_dbf_column_values(grace, "RACE_ID") or []) if v}
+        unit_races_values = _dbf_column_values(game_dir / "Globals" / "GUNITS.DBF", "RACE_ID")
+        if unit_races_values is None:
+            race_link = {
+                "table": "GUNITS.DBF",
+                "field": "RACE_ID",
+                "target": "GRACE.DBF.RACE_ID",
+                "field_missing": True,
+                "nonempty": None,
+                "resolved": None,
+            }
+        else:
+            unit_races = [v.lower() for v in unit_races_values if v]
+            resolved = sum(1 for v in unit_races if v in race_ids)
+            race_link = {
+                "table": "GUNITS.DBF",
+                "field": "RACE_ID",
+                "target": "GRACE.DBF.RACE_ID",
+                "field_missing": False,
+                "nonempty": len(unit_races),
+                "resolved": resolved,
+            }
 
     return {
         "text_id_table": "Globals/Tglobal.dbf",
         "text_id_count": len(text_ids),
+        "text_id_distinct_all": text_id_distinct_all,
         "text_links": links,
         "race_link": race_link,
     }
-
-
-def _strip_count_prefix(value: str) -> str:
-    """Strip a leading count digit / marker from an ID reference.
-
-    ``1g000rr000`` and ``g000rr000`` both refer to race ``g000rr000``; a
-    leading ``0``-``9`` or ``*`` is an occurrence count or marker, not part of
-    the ID.  See ``docs/data-layout.md``.
-    """
-
-    return value.lstrip("0123456789*")
 
 
 def build_report(game_dir: str | os.PathLike[str]) -> dict:
@@ -297,6 +325,11 @@ def build_report(game_dir: str | os.PathLike[str]) -> dict:
     root = Path(game_dir)
     if not root.is_dir():
         raise NotADirectoryError(f"not a directory: {root}")
+    if not (root / "Globals").is_dir() and not (root / "Exe").is_dir():
+        raise NotADirectoryError(
+            f"not a Disciples install: {root} has neither Globals/ nor Exe/; "
+            "point --game-dir at the folder that contains them"
+        )
 
     dlg_reports = []
     palanim_reports = []
@@ -345,14 +378,21 @@ def render_text(report: dict) -> str:
     lines.append("  by directory: " + ", ".join(f"{k}:{v}" for k, v in inv["by_directory"].items()))
 
     lines.append("")
-    lines.append(f"dBase III tables ({len(report['dbf'])}):")
-    for d in report["dbf"]:
+    parsed = [d for d in report["dbf"] if "error" not in d]
+    dbf_errors = [d for d in report["dbf"] if "error" in d]
+    lines.append(f"dBase III tables ({len(parsed)}):")
+    for d in parsed:
         ok = "OK" if d["arithmetic_ok"] else "MISMATCH"
         lines.append(
-            f"  {d['path']}: v{d['version']} {d['records']} rec, "
+            f"  {d['path']}: v{d['version']} {d['records']} rec "
+            f"({d['live_records']} live, {d['deleted_records']} deleted), "
             f"hdr={d['header_len']} rec={d['record_len']} {ok} "
             f"[{', '.join(f['name'] for f in d['fields'])}]"
         )
+    if dbf_errors:
+        lines.append("  unreadable files:")
+        for d in dbf_errors:
+            lines.append(f"    {d['path']}: {d['error']}")
 
     lines.append("")
     lines.append(f"MQDB containers ({len(report['mqdb'])}):")
@@ -369,15 +409,21 @@ def render_text(report: dict) -> str:
     xref = report["cross_references"]
     lines.append(f"  text IDs: {xref['text_id_table']} -> {xref['text_id_count']} distinct TXT_IDs")
     for link in xref["text_links"]:
-        lines.append(
-            f"  {link['table']}.{link['field']}: {link['resolved']}/{link['nonempty']} "
-            f"resolve to a TXT_ID"
-        )
+        if link["field_missing"]:
+            lines.append(f"  {link['table']}.{link['field']}: n/a (field missing)")
+        else:
+            lines.append(
+                f"  {link['table']}.{link['field']}: {link['resolved']}/{link['nonempty']} "
+                f"resolve to a TXT_ID"
+            )
     if xref["race_link"]:
         r = xref["race_link"]
-        lines.append(
-            f"  {r['table']}.{r['field']}: {r['resolved']}/{r['nonempty']} resolve to {r['target']}"
-        )
+        if r["field_missing"]:
+            lines.append(f"  {r['table']}.{r['field']}: n/a (field missing)")
+        else:
+            lines.append(
+                f"  {r['table']}.{r['field']}: {r['resolved']}/{r['nonempty']} resolve to {r['target']}"
+            )
 
     lines.append("")
     lines.append(f"dialog scripts ({len(report['dlg'])}):")

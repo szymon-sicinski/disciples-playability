@@ -35,6 +35,13 @@ is untouched. Where a number needs a decode the report does not already do
 (dBase field tables, ID cross-reference counts), the field path is still
 `report.*` — both are emitted by the command above.
 
+dBase III records begin with a 1-byte **deletion flag** (`0x20` space = live,
+`0x2A` `*` = deleted) before the first field. The reader skips deleted records
+when it reads a column, so every cross-reference count below is over **live**
+(non-deleted) records; the header's record count still includes deleted rows,
+and both figures are reported per table (`report.dbf[].records`,
+`.live_records`, `.deleted_records`).
+
 ---
 
 ## 0. Directory inventory
@@ -42,9 +49,16 @@ is untouched. Where a number needs a decode the report does not already do
 | Claim | Evidence | Grade |
 |---|---|---|
 | 314 files total across the install | `report.inventory.total_files` | **V** |
-| 131 `.DBF` tables: `Globals` 52, `Scens` 54, `Scendata` 6, `ImgData` 16, `Campaign` 2, `Interf` 1 (`TApp.dbf`) | `report.inventory.by_directory` | **V** |
+| 131 `.DBF` tables: `Globals` 52, `Scens` 54, `Scendata` 6, `ImgData` 16, `Campaign` 2, `Interf` 1 (`TApp.dbf`) | `report.dbf[]` (counted per directory, not `inventory.by_directory`) | **V** |
 | 19 `MQDB` containers: 11 `.dbi` + 5 `.ff` + 3 `.wdb` | `report.mqdb[]` | **V** |
 | 3 `.dlg` dialog scripts, 6 `.MFT` fonts, 41 `.smk` videos, 25 `.wav` audio | `report.dlg/mft/smk/wav` | **V** |
+
+Note: `inventory.by_directory` counts *every* file in a directory, so e.g.
+`Interf` is 14 there (6 `.mft` + 3 `.dlg` + 3 `.dbi` + 1 `.ff` + 1 `.dbf`);
+the 131-table figure and the per-directory DBF counts come from `report.dbf[]`,
+which only lists tables. The other five directories happen to contain only DBF
+files, which is why their numbers coincide. **V** — both are emitted by the
+command above.
 
 `.ff` ("full frame"?) and `.wdb` ("wave database") files carry the same `MQDB`
 magic as `.dbi` — one container format, three extensions by payload kind
@@ -70,6 +84,12 @@ start, all multi-byte fields little-endian):
 | … | … | records, `reclen` bytes each | — |
 | EOF | 1 | `0x1A` end marker | — |
 
+Each record begins with a 1-byte **deletion flag** (`0x20` space = live, `0x2A`
+`*` = deleted), so `record_len == 1 + sum(field lengths)` (e.g. `GUNITS.DBF`:
+247 = 246 + 1). **V** — the field offsets below start at 1, and the deleted
+count is reported per table. 1,385 records across 45 of the 131 tables carry the
+deletion flag (`report.dbf[].deleted_records`, summed).
+
 Field descriptor (32 bytes each): 11-byte name, 1-byte type (`C` character,
 `N` numeric, `L` logical), 1-byte length at descriptor offset 16, 1-byte
 decimal count at 17. **V** — the field tables below are the decoded
@@ -89,6 +109,8 @@ the header is self-consistent, not a guess.
 
 ### Field tables (decoded, ≥6 tables)
 
+Record counts are `header records (live, deleted)`.
+
 `Globals\GACTION.DBF` — 13 records, header 161 B, record 270 B (closes).
 Fields: `CATEGORY N:2`, `CHANCE N:3`, `NAME_TXT C:10`, `DESC_TXT C:254`. **V**
 
@@ -102,45 +124,47 @@ Fields: `BUILD_ID C:10`, `NAME_TXT C:10`, `DESC_TXT C:10`, `REQUIRED C:10`,
 `COST C:29`, `LEVEL N:1`, `CATEGORY N:2`, `BRANCH N:2`, `PIC_1 C:9`,
 `FRAME_1 N:3`, `FRAME_2 N:3`, `POS_X/Y/CX/CY/Z N:3`, `COMMENTS C:20`. **V**
 
-`Globals\GUNITS.DBF` — 310 records, header 961 B, record 247 B (closes).
-Fields: `UNIT_ID C:10`, `UNIT_CAT N:2`, `LEVEL N:2`, `PREV_ID C:10`,
-`RACE_ID C:10`, `BRANCH N:2`, `SIZE_SMALL L:1`, `SEX_M L:1`, `ENROLL_C C:29`,
-`ENROLL_B C:10`, `NAME_TXT C:10`, `DESC_TXT C:10`, `ABIL_TXT C:10`,
-`ATTACK_ID C:10`, `HIT_POINT N:3`, `ARMOR N:3`, `REGEN N:4`, `REVIVE_C C:29`,
-`HEAL_C C:29`, `TRAINING_C C:29`, `XP_KILLED N:4`, `UPGRADE_B C:10`,
-`XP_NEXT N:4`, `MOVE N:3`, `SCOUT N:2`, `LIFE_TIME N:2`, `LEADERSHIP N:2`,
-`NEGOTIATE N:3`, `LEADER_CAT N:2`. **V**
+`Globals\GUNITS.DBF` — 310 records (308 live, 2 deleted), header 961 B,
+record 247 B (closes). Fields: `UNIT_ID C:10`, `UNIT_CAT N:2`, `LEVEL N:2`,
+`PREV_ID C:10`, `RACE_ID C:10`, `BRANCH N:2`, `SIZE_SMALL L:1`, `SEX_M L:1`,
+`ENROLL_C C:29`, `ENROLL_B C:10`, `NAME_TXT C:10`, `DESC_TXT C:10`,
+`ABIL_TXT C:10`, `ATTACK_ID C:10`, `HIT_POINT N:3`, `ARMOR N:3`, `REGEN N:4`,
+`REVIVE_C C:29`, `HEAL_C C:29`, `TRAINING_C C:29`, `XP_KILLED N:4`,
+`UPGRADE_B C:10`, `XP_NEXT N:4`, `MOVE N:3`, `SCOUT N:2`, `LIFE_TIME N:2`,
+`LEADERSHIP N:2`, `NEGOTIATE N:3`, `LEADER_CAT N:2`. **V**
 
-`Globals\GSPELLS.DBF` — 81 records, header 545 B, record 139 B (closes).
-Fields: `SPELL_ID C:10`, `CATEGORY N:2`, `LEVEL N:2`, `CASTING_C C:29`,
-`BUY_C C:29`, `NAME_TXT C:10`, `DESC_TXT C:10`, `UNIT_ID C:10`,
-`RESTORE_M N:3`, `AREA N:3`, `MODIF_ID C:10`, `MODIF_TXT C:10`,
-`DAMAGE_SRC N:2`, `DAMAGE_QTY N:3`, `HEAL_QTY N:3`, `AI_CAT N:2`. **V**
+`Globals\GSPELLS.DBF` — 81 records (80 live, 1 deleted), header 545 B,
+record 139 B (closes). Fields: `SPELL_ID C:10`, `CATEGORY N:2`, `LEVEL N:2`,
+`CASTING_C C:29`, `BUY_C C:29`, `NAME_TXT C:10`, `DESC_TXT C:10`,
+`UNIT_ID C:10`, `RESTORE_M N:3`, `AREA N:3`, `MODIF_ID C:10`,
+`MODIF_TXT C:10`, `DAMAGE_SRC N:2`, `DAMAGE_QTY N:3`, `HEAL_QTY N:3`,
+`AI_CAT N:2`. **V**
 
-`Globals\Tglobal.dbf` — 1624 records, header 225 B, record 1028 B (closes).
-Fields: `TXT_ID C:10`, `ENGLISH C:254`, `FRENCH C:254`, `GERMAN C:254`,
-`VERIFIED L:1`, `CONTEXT C:254`. This is the localisation table (three
-languages, 254-byte strings). **V**
+`Globals\Tglobal.dbf` — 1624 records (1336 live, 288 deleted), header 225 B,
+record 1028 B (closes). Fields: `TXT_ID C:10`, `ENGLISH C:254`,
+`FRENCH C:254`, `GERMAN C:254`, `VERIFIED L:1`, `CONTEXT C:254`. This is the
+localisation table (three languages, 254-byte strings). **V**
 
-`Scens\SScen.DBF` — 16 records, header 737 B, record 221 B (closes). Fields are the
-per-scenario container names (`NO_SCEN`, `MAP`, `ROADS`, `MISSION`, `PLAN`,
+`Scens\SScen.DBF` — 16 records, header 737 B, record 221 B (closes). Fields are
+the per-scenario container names (`NO_SCEN`, `MAP`, `ROADS`, `MISSION`, `PLAN`,
 `FORTS`, `UNITS`, `STACKS`, `PLAYERS`, `ITEMS`, `BAGS`, `SITES`, `RUINS`,
 `TOMBS`, `LMARKS`, `SPELLS`, `CASTS`, `INFO`, `HINTS`, `CRYSTALS`, `RODS`,
 `DIPLO` — all `C:10`). **V**
 
-`ImgData\IUNIT.DBF` — 328 records, record 61 B (closes). Fields map a
-`UNIT_ID C:10` to animation names: `FACE C:8`, `HIT C:8`, `UNITMOVE C:8`,
-`UNITFRAME N:3`, `SPELL C:8`, `SPELLFRAME N:3`, `SPELLDIR L:1`,
-`INDIVSPELL C:8`, `INDIVFRAME C:2`, `INDIVDIR L:1`. **V** — these 8-byte
-names are the same names that appear as `MQDB` chunk names (§2).
+`ImgData\IUNIT.DBF` — 328 records (308 live, 20 deleted), header 385 B,
+record 61 B (closes). Fields map a `UNIT_ID C:10` to animation names:
+`FACE C:8`, `HIT C:8`, `UNITMOVE C:8`, `UNITFRAME N:3`, `SPELL C:8`,
+`SPELLFRAME N:3`, `SPELLDIR L:1`, `INDIVSPELL C:8`, `INDIVFRAME C:2`,
+`INDIVDIR L:1`. **V** — of these 8-byte names, only `FACE` matches an `MQDB`
+name-table entry (see §2); `HIT` and `UNITMOVE` match nothing.
 
 ### Cross-reference convention
 
-IDs are fixed-width strings, base form 9 characters:
+IDs are fixed-width strings, base form **10** characters:
 
 ```
-<prefix> <3-digit pad> <2-letter type> <index>
-   g         000            uu            000        ->  g000uu000
+<prefix> <3-digit pad> <2-letter type> <4-digit index>
+   g         000            uu            0000        ->  g000uu0000
 ```
 
 Observed prefixes/types (all **V**, read from the columns named in §1 field
@@ -148,30 +172,33 @@ tables): `g` = a game entity (`uu` unit, `rr` race, `bb` build, `aa`
 ability/attack, `sp` spell); `x` = a localisation key (`tg` text-global), which
 resolves against `Tglobal.TXT_ID`.
 
-A field that references one or more IDs may carry a **leading count digit or
-marker** (`0`–`9`, `*`) in front of the base ID, so `1g000rr000` and
-`g000rr000` both refer to race `g000rr000`, and `6g000aa000` means "six of
-ability `g000aa000`". **V** — `report.cross_references` strips this prefix
-before matching. There are also colon-separated multi-ID lists such as
-`g0200:r0000:y0000:e0000:w0000` (a five-resource cost vector); the individual
-`<letter><4-digit>` tokens are **H** (resource quantities, not yet linked to a
-table).
+There is **no leading count digit or marker** on a reference. A field that
+references one or more IDs holds the plain 10-character ID; multi-ID values are
+colon-separated lists such as `g0200:r0000:y0000:e0000:w0000` (a five-resource
+cost vector). **V** for the plain-ID form and the colon separation; the
+individual `<letter><4-digit>` tokens are **H** (resource quantities, not yet
+linked to a table). The `*` byte that *appears* to prefix some `TXT_ID`s is the
+record deletion flag at byte 0, not part of the ID — it is skipped by the
+reader, never part of a reference.
 
-Tables proven to link (each link is a `report.cross_references` row, **V**):
+Tables proven to link (each link is a `report.cross_references` row, counted
+over **live** records, **V**):
 
 | From | To | Non-empty refs | Resolved |
 |---|---|---|---|
 | `GACTION.NAME_TXT` | `Tglobal.TXT_ID` | 13 | 13 |
-| `GUNITS.NAME_TXT` | `Tglobal.TXT_ID` | 309 | 309 |
-| `GUNITS.DESC_TXT` | `Tglobal.TXT_ID` | 309 | 309 |
+| `GUNITS.NAME_TXT` | `Tglobal.TXT_ID` | 308 | 308 |
+| `GUNITS.DESC_TXT` | `Tglobal.TXT_ID` | 308 | 308 |
 | `GBUILD.NAME_TXT` | `Tglobal.TXT_ID` | 68 | 68 |
-| `GSPELLS.NAME_TXT` | `Tglobal.TXT_ID` | 81 | 81 |
-| `GUNITS.RACE_ID` | `GRACE.RACE_ID` | 224 | 224 |
+| `GSPELLS.NAME_TXT` | `Tglobal.TXT_ID` | 80 | 80 |
+| `GUNITS.RACE_ID` | `GRACE.RACE_ID` | 223 | 223 |
 
-`Tglobal` holds 242 distinct `TXT_ID`s (`report.cross_references.text_id_count`).
-Every `*_TXT` reference in the tables above resolves, case-insensitively —
-which is the same case-insensitivity the plan's Q6 asks about, observed here at
-the *data* level, not just the path level.
+`Tglobal` holds 1,336 distinct `TXT_ID`s among its live records
+(`report.cross_references.text_id_count`); including the 288 deleted records the
+distinct count is 1,609 (`report.cross_references.text_id_distinct_all`). Every
+`*_TXT` reference in the tables above resolves, case-insensitively — which is
+the same case-insensitivity the plan's Q6 asks about, observed here at the
+*data* level, not just the path level.
 
 ---
 
@@ -266,19 +293,27 @@ has `winner.tiles_exactly == true` for all 19. **V**
 
 ### Chunk-id roles (observed, **H** for the semantics, **V** for the numbers)
 
-The first three chunks of an image container are, in order: a **name table**
-(chunk id 3), a **palette** (id 2, payload 1024 B = 256 entries × 4 B), and a
-**`DBI`** chunk (id 1, payload 32 B = 8-byte name `"DBI"` + 6 u32s). After
-that, id 4+ chunks are named image/sprite layers. The name-table chunk is a
-16-byte-entry list: 8-byte null-terminated name + two u32s (observed `0` and a
-small increasing integer). For `Interf.dbi` the name table has 473 entries
-(7568 B payload ÷ 16). **V** (numbers) / **H** (what the two trailing u32s
-mean). The palette bytes themselves are **not decoded** — the report states
-`1024` bytes and `256×4`, never the colour values.
+The first three chunks of a `.dbi` image container are, in **8 of 11** files, a
+**name table** (chunk id 3), a **palette** (id 2, payload 1024 B = 256 entries
+× 4 B), and a **`DBI`** chunk (id 1, payload 32 B = 8-byte name `"DBI"` + 6
+u32s). The order is *not* universal: `Imgs1\BATTLE.DBI` and
+`Imgs1\CAPITAL.DBI` start `[1, 2, 3]`, and `Imgs2\ISO.DBI` starts `[956, 2, 1]`
+(`report.mqdb[].chunks[].chunk_id`). The `.ff` and `.wdb` containers start
+differently again (`[1, 2, 3]` for all five `.ff`; `[1, 2, 4]` for the two
+`CAPITAL`/`MIDGARD` wave databases). After that, id 4+ chunks are named
+image/sprite layers. **V** (the numbers) / **H** (what each id *means*). The
+name-table chunk is a 16-byte-entry list: 8-byte null-terminated name + two u32s
+(observed `0` and a small increasing integer). For `Interf.dbi` the name table
+has 473 entries (7568 B payload ÷ 16). **V** (numbers) / **H** (what the two
+trailing u32s mean). The palette bytes themselves are **not decoded** — the
+report states `1024` bytes and `256×4`, never the colour values.
 
 The leading 8 bytes of each image chunk's payload are its name (e.g.
-`ARMY01C`, `BUILTB01C`, `TRAINER`), null-terminated ASCII — the same 8-byte
-names `ImgData\*.DBF` references (`FACE`, `HIT`, `UNITMOVE` …). **V**.
+`ARMY01C`, `BUILTB01C`, `TRAINER`), null-terminated ASCII. `ImgData\IUNIT.DBF`'s
+`FACE` column (148 distinct 8-byte values) matches `Imgs1\UNIT.DBI`'s name
+table **148/148, case-insensitively** (`fh001s00` ↔ `FD026S00`); the `HIT` and
+`UNITMOVE` columns (145 and 151 distinct values) match **nothing** in any of the
+11 name tables. **V**.
 
 ---
 
@@ -286,15 +321,22 @@ names `ImgData\*.DBF` references (`FACE`, `HIT`, `UNITMOVE` …). **V**.
 
 Plain text (CRLF), tab-separated. Grammar: a `DIALOG <name>,x,y,w,h,<flags>,<bg>`
 line, then `BEGIN`, then element rows, then `END`. Element rows are
-`<TAG>\t<name>,<args…>`; the coordinates are in the fixed 640×480 frame. **V**
+`<TAG>\t<name>,<args…>`. **V**
 
-```
+```text
 DIALOG	DLG_CHAT,0,0,640,480,1,CHAT
 BEGIN
 	BUTTON	BTN_UP,486,61,511,86,OPT05N,OPT05H,OPT05C,OPT05D,,0
 	TEXT	TXT_ACTION_RESULT,85,67,335,102,255,255,255,0,0,0,LEFT_ALIGN,VCENTER_ALIGN
 END
 ```
+
+The `DIALOG` header carries its **own** `x,y,w,h`, and the dialogs are usually
+*smaller* than the 640×480 frame: `Interf\Interf.dlg` has 90 dialogs across 13
+distinct sizes (`177×201` … `640×480`; only 29 of the 90 are `640×480`),
+`Menus.dlg` has 15 across 3, and `ScenEdit.dlg` has 48 across 24. **V** — the
+geometry is plain editable text placed within the game's 640×480 canvas, but it
+is not a single fixed full-screen size per dialog.
 
 Element tags observed across the 3 files (`report.dlg[].element_types`): `IMAGE`,
 `BUTTON`, `TEXT`, `TOGGLE`, `EDIT`, `LBOX`, `MCLBOX`, `TLBOX`, `RADIO`,
@@ -306,9 +348,10 @@ Element tags observed across the 3 files (`report.dlg[].element_types`): `IMAGE`
 | `Interf/Menus.dlg` | 15 | 201 |
 | `Interf/ScenEdit.dlg` | 48 | 669 |
 
-This is the evidence for the plan's claim that the UI geometry is hardcoded
-640×480 in plain text: the `x,y,w,h` tuples are editable strings, not compiled
-constants. **V**
+This is the evidence for the plan's claim that the UI geometry is hardcoded in
+plain text: the `x,y,w,h` tuples are editable strings, not compiled constants.
+**V** — with the correction that each dialog declares its own size, rather than
+every dialog filling 640×480.
 
 ---
 
@@ -344,12 +387,12 @@ container structure; the per-chunk audio codec is **H** (not decoded).
 
 ## 7. Music (`.wav`)
 
-25 files, all `RIFF`/`WAVE` (`report.wav[]`). 24 use WAVE format tag 17 (IMA
-ADPCM) and one (`AMBIENT5.WAV`) is tag 1 (PCM); 24 are 22050 Hz and one
-(`AMBIEN11.WAV`) is 44100 Hz; 24 are stereo and one (`AMBIENT5.WAV`) is mono.
-**V** — a small refinement of the plan's "plain `.wav`": they are WAVE files,
-but the majority are ADPCM-compressed, which only matters to a decoder, not to
-the "music needs no CD" conclusion.
+25 files, all `RIFF`/`WAVE` (`report.wav[]`). 23 use WAVE format tag 17 (IMA
+ADPCM) at 22050 Hz stereo, 1 (`AMBIEN11.WAV`) is tag 17 at 44100 Hz stereo, and
+1 (`AMBIENT5.WAV`) is tag 1 (PCM) at 22050 Hz **mono**. **V** — a small
+refinement of the plan's "plain `.wav`": they are WAVE files, but the majority
+are ADPCM-compressed, which only matters to a decoder, not to the "music needs
+no CD" conclusion.
 
 ---
 
@@ -377,9 +420,12 @@ Plain text, INI-like: 4 sections (`[HUMAN]`, `[UNDEAD]`, `[DWARF]`,
 | Q5 | `MQDB` header field @ `0x18` (near file size but not equal), and the `MQRC` chunk field @ `+0x0C` (usually = size, `0` on some chunks) | **H** | Trace the reader in `C4DLL-R.DLL`/`HA312W32.DLL` to the two fields, or find a file where `+0x0C ≠ +0x10` on an *image* chunk and diff the payloads against a retail decode. |
 | Q6 | Is the case-insensitive resolution (paths *and* ID strings) Wine, or a Win32 API inside the game's DLLs? | **H** (was "works, mechanism unverified" in the plan) | A retail run under Wine with `WINEDEBUG=+file` while `Config.exe`/the game resolves `globals` vs `Globals`; or a disassembly of the string-compare in `C4DLL-R.DLL`. |
 | Q7 | What do the two trailing u32s of a name-table entry mean (observed `0` and a small increasing integer)? | **H** (new) | Cross-check against the `ImgData\*.DBF` frame-count fields (`UNITFRAME`, `SPELLFRAME`): if entry *i*'s integer equals the sprite's frame count, it is a frame count. |
-| Q8 | What are the `MQRC` chunk-id *roles* (ids 1/2/3 are `DBI`/palette/name-table; what do the id-4+ values and the out-of-order ids like 498–501 encode)? | **H** (new) | Group chunks by id and correlate the id with the payload's leading name/type; a decode of one id's payload confirms the role. |
+| Q8 | What are the `MQRC` chunk-id *roles* (ids 1/2/3 are `DBI`/palette/name-table in some files but appear in different orders; what do the id-4+ values and the out-of-order ids like 956 encode)? | **H** (new) | Group chunks by id and correlate the id with the payload's leading name/type; a decode of one id's payload confirms the role. |
 | Q9 | `.wdb` per-chunk audio codec and `.smk`/`.wav` decode | **H** (new) | Standard Smacker / IMA-ADPCM decoders against one file each — out of scope for this card (no media decoding). |
-| Q10 | What is the `*` prefix on some `Tglobal.TXT_ID`s (e.g. `*x000tg707`)? | **H** (new) | Check whether `*`-prefixed rows are commented-out/disabled entries by comparing the `VERIFIED` logical flag. |
+
+The plan's former Q10 (a `*` prefix on some `Tglobal.TXT_ID`s) is **resolved**:
+the `*` was the record deletion flag at byte 0, leaking into the field read by
+an off-by-one; there is no `*` prefix on IDs.
 
 Nothing above is filled in by analogy; each row states what would actually
 falsify it.

@@ -57,6 +57,15 @@ def _data_main(argv: list[str]) -> int:
         _emit(json.dumps(report, indent=2))
     else:
         _emit(render_text(report))
+
+    dbf_errors = [d for d in report["dbf"] if "error" in d]
+    if dbf_errors:
+        print(
+            f"disciples-play data: {len(dbf_errors)} file(s) could not be parsed "
+            "(see the report's dbf[] 'error' entries)",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
