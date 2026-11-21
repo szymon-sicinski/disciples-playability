@@ -13,9 +13,9 @@ pieces:
 * :func:`build_preset` -- the ``ddraw.ini`` the plan calls "the preset".
 * :func:`fetch_wrapper` -- download (or hand in) the pinned release zip, verify
   its SHA-256 *before* touching anything, and extract only the files we ship.
-* :func:`install_wrapper` -- copy the DLL and write the preset into a game
-  directory, refusing to clobber a DLL we did not write and backing up any
-  ``ddraw.ini`` the user edited.
+* :func:`install_wrapper` -- copy the DLL and write the preset **next to
+  ``Disciple.exe``** (never into the install root), refusing to clobber a DLL we
+  did not write and backing up any ``ddraw.ini`` the user edited.
 
 The binary is never vendored in this repository: it is fetched from the pinned
 tag and checked against a digest that was measured once and recorded in
@@ -56,6 +56,7 @@ __all__ = [
     "build_preset",
     "fetch_wrapper",
     "install_wrapper",
+    "resolve_exe_dir",
 ]
 
 logger = logging.getLogger(__name__)
@@ -130,6 +131,16 @@ _BASE_HEIGHT = 480
 
 #: Marker file recording the digest of the ``ddraw.dll`` this pack installed.
 _MARKER_FILENAME = ".disciples-play-wrapper.json"
+
+#: The executable whose *directory* is the only place the wrapper is loaded
+#: from: ``HA312W32.DLL`` calls ``LoadLibrary("ddraw.dll")``, which resolves
+#: against the running executable's directory. Spelled and matched as
+#: :func:`disciples_play.launch.resolve_install` finds it, so the two agree.
+_EXE_NAME = "Disciple.exe"
+
+#: The GOG layout's subdirectory holding the executable, under the install root
+#: that holds ``Globals/``, ``Imgs1/``, ... (same name ``launch`` resolves).
+_EXE_SUBDIR = "Exe"
 
 #: Zip entries we copy out of the release archive. Everything else (the config
 #: GUI, the shader packs) is deliberately skipped.
@@ -293,12 +304,50 @@ def fetch_wrapper(
     return _extract(data, Path(dest))
 
 
+def resolve_exe_dir(target: str | os.PathLike[str]) -> Path:
+    """Return the directory holding ``Disciple.exe`` -- where the wrapper goes.
+
+    ``ddraw.dll`` is loaded by ``LoadLibrary("ddraw.dll")`` from the game's own
+    DLLs, which resolves against the *running executable's directory*: ``Exe/``
+    on the GOG layout, not the install root that holds ``Globals/`` and
+    ``Imgs1/``. A wrapper written anywhere else is inert, so this never invents
+    a directory -- it resolves one of two shapes and refuses everything else:
+
+    * ``target`` itself holds ``Disciple.exe`` -> ``target``;
+    * otherwise ``target/Exe/Disciple.exe`` exists -> ``target/Exe``, i.e. the
+      install root that :func:`disciples_play.launch.resolve_install` hands out.
+
+    Anything else raises :class:`WrapperInstallError` naming both paths that
+    were tried. The nested shape is checked second on purpose: a directory that
+    holds the executable is taken at its word rather than being second-guessed.
+    """
+    path = Path(target)
+    if path.is_dir() and (path / _EXE_NAME).is_file():
+        return path
+    nested = path / _EXE_SUBDIR
+    if nested.is_dir() and (nested / _EXE_NAME).is_file():
+        return nested
+    raise WrapperInstallError(
+        f"no {_EXE_NAME} in {path} (looked for {path / _EXE_NAME} and "
+        f"{nested / _EXE_NAME}); pass the install root or the directory that holds "
+        f"{_EXE_NAME} -- the wrapper only loads from next to the executable"
+    )
+
+
 def install_wrapper(
     game_dir: str | os.PathLike[str],
     staging: str | os.PathLike[str],
     preset: str | None = None,
 ) -> InstallResult:
-    """Install the staged wrapper into ``game_dir`` on an explicit call only.
+    """Install the staged wrapper next to ``Disciple.exe``, on an explicit call.
+
+    ``game_dir`` is the game directory you have at hand, in either of the two
+    shapes :func:`resolve_exe_dir` accepts -- the install root, or the directory
+    that holds ``Disciple.exe`` itself. It is *not* "whatever path you pass":
+    the destination is always resolved to the executable's directory first, so
+    the install root cannot become a home for a DLL the launcher will never
+    load. A directory that holds ``Disciple.exe`` in neither shape raises
+    :class:`WrapperInstallError` and nothing is written.
 
     * ``ddraw.dll`` is copied from ``staging``. An existing ``ddraw.dll`` that
       was not written by this pack -- judged by comparing its SHA-256 against
@@ -309,6 +358,10 @@ def install_wrapper(
       is backed up to ``ddraw.ini.pre-pack`` (created once, never overwritten)
       before ours is written; a byte-identical file is left untouched.
 
+    All three files -- the DLL, the preset and the marker -- land in that one
+    directory, which is exactly where ``doctor`` and
+    :func:`disciples_play.launch.wrapper_staged` look.
+
     The ``ddraw.ini`` staged by :func:`fetch_wrapper` is upstream's reference
     template and is *not* installed: the game's ``ddraw.ini`` is always our
     preset (or the caller's ``preset=``).
@@ -318,16 +371,17 @@ def install_wrapper(
     that "differs from the preset" on a later install is usually cnc-ddraw's
     saved state rather than a human edit -- the backup preserves it either way.
     """
-    game_dir = Path(game_dir)
     staging = Path(staging)
 
     dll_src = staging / "ddraw.dll"
     if not dll_src.is_file():
         raise WrapperInstallError(f"staging directory has no ddraw.dll: {staging}")
 
+    exe_dir = resolve_exe_dir(game_dir)
+
     new_digest = _sha256_file(dll_src)
-    target_dll = game_dir / "ddraw.dll"
-    marker = game_dir / _MARKER_FILENAME
+    target_dll = exe_dir / "ddraw.dll"
+    marker = exe_dir / _MARKER_FILENAME
 
     if target_dll.exists():
         current_digest = _sha256_file(target_dll)
@@ -338,16 +392,15 @@ def install_wrapper(
                 "Move it away (or delete it) and re-run."
             )
 
-    game_dir.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(dll_src, target_dll)
     _write_marker(marker, new_digest)
-    logger.info("installed ddraw.dll into %s", game_dir)
+    logger.info("installed ddraw.dll into %s", exe_dir)
 
     ini_text = preset if preset is not None else build_preset()
-    ini_backed_up, ini_written = _install_ini(game_dir / "ddraw.ini", ini_text)
+    ini_backed_up, ini_written = _install_ini(exe_dir / "ddraw.ini", ini_text)
     return InstallResult(
         ddraw_dll=target_dll,
-        ddraw_ini=game_dir / "ddraw.ini",
+        ddraw_ini=exe_dir / "ddraw.ini",
         marker=marker,
         ini_backed_up=ini_backed_up,
         ini_written=ini_written,

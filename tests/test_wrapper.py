@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+import disciples_play.launch as launch
 import disciples_play.wrapper as wrapper
 
 FAKE_DLL = b"DLL!"  # 4 bytes, as the card specifies
@@ -297,90 +298,185 @@ def test_redirect_handler_refuses_foreign_host() -> None:
         handler.redirect_request(req, None, 302, "Found", {}, "https://evil.example.com/x.zip")
 
 
+# --- resolve_exe_dir --------------------------------------------------------
+
+
+def install_tree(tmp_path: Path, name: str = "game") -> tuple[Path, Path]:
+    """A minimal GOG-shaped install, ``<root>/Exe/Disciple.exe``.
+
+    Returns ``(root, exe_dir)``. The executable is the only file that exists:
+    the wrapper needs nothing else, and nothing here reads game content.
+    """
+    root = tmp_path / name
+    exe_dir = root / "Exe"
+    exe_dir.mkdir(parents=True)
+    (exe_dir / "Disciple.exe").write_bytes(b"MZ")
+    return root, exe_dir
+
+
+def test_resolve_exe_dir_takes_the_directory_holding_the_exe(tmp_path: Path) -> None:
+    _, exe_dir = install_tree(tmp_path)
+    assert wrapper.resolve_exe_dir(exe_dir) == exe_dir
+
+
+def test_resolve_exe_dir_resolves_the_install_root_to_exe(tmp_path: Path) -> None:
+    root, exe_dir = install_tree(tmp_path)
+    assert wrapper.resolve_exe_dir(root) == exe_dir
+
+
+def test_resolve_exe_dir_prefers_the_given_directory(tmp_path: Path) -> None:
+    """A directory that holds the exe is taken at its word, nested ``Exe/`` or not."""
+    _, exe_dir = install_tree(tmp_path)
+    (exe_dir / "Exe").mkdir()
+    (exe_dir / "Exe" / "Disciple.exe").write_bytes(b"MZ")
+    assert wrapper.resolve_exe_dir(exe_dir) == exe_dir
+
+
+def test_resolve_exe_dir_refuses_a_directory_without_the_exe(tmp_path: Path) -> None:
+    somewhere = tmp_path / "somewhere"
+    somewhere.mkdir()
+    with pytest.raises(wrapper.WrapperInstallError, match="Disciple.exe"):
+        wrapper.resolve_exe_dir(somewhere)
+
+
+def test_resolve_exe_dir_refuses_a_missing_directory(tmp_path: Path) -> None:
+    with pytest.raises(wrapper.WrapperInstallError, match="Disciple.exe"):
+        wrapper.resolve_exe_dir(tmp_path / "typo")
+
+
+def test_resolve_exe_dir_is_symmetric_with_the_launcher(tmp_path: Path) -> None:
+    """The wrapper resolves the same directory ``launch`` launches from."""
+    root, exe_dir = install_tree(tmp_path)
+    (exe_dir / "DISCIPLE.INI").write_text("[Installation]\n", encoding="cp1252")
+    assert wrapper.resolve_exe_dir(root) == launch.resolve_install(root).exe_dir
+
+
 # --- install_wrapper --------------------------------------------------------
 
 
-def test_install_writes_dll_and_marker(tmp_path: Path) -> None:
+def test_install_into_exe_dir_puts_everything_next_to_the_exe(tmp_path: Path) -> None:
     staging = staged_dir(tmp_path)
-    game = tmp_path / "game"
-    result = wrapper.install_wrapper(game, staging)
-    assert (game / "ddraw.dll").read_bytes() == FAKE_DLL
-    marker = json.loads((game / ".disciples-play-wrapper.json").read_text())
+    root, exe_dir = install_tree(tmp_path)
+    result = wrapper.install_wrapper(exe_dir, staging)
+    assert (exe_dir / "ddraw.dll").read_bytes() == FAKE_DLL
+    marker = json.loads((exe_dir / ".disciples-play-wrapper.json").read_text())
     assert marker["ddraw_dll_sha256"] == digest(FAKE_DLL)
     assert marker["cnc_ddraw_tag"] == wrapper.CNC_DDRAW_TAG
+    assert result.ddraw_dll == exe_dir / "ddraw.dll"
+    assert result.marker == exe_dir / ".disciples-play-wrapper.json"
     assert result.ini_written is True
+    # nothing leaked into the install root
+    assert sorted(p.name for p in root.iterdir()) == ["Exe"]
+
+
+def test_install_from_install_root_lands_next_to_the_exe(tmp_path: Path) -> None:
+    """The reported bug: the root was written into as if it were the exe dir."""
+    staging = staged_dir(tmp_path)
+    root, exe_dir = install_tree(tmp_path)
+    result = wrapper.install_wrapper(root, staging)
+    assert result.ddraw_dll == exe_dir / "ddraw.dll"
+    assert result.ddraw_ini == exe_dir / "ddraw.ini"
+    assert result.marker == exe_dir / ".disciples-play-wrapper.json"
+    assert (exe_dir / "ddraw.dll").read_bytes() == FAKE_DLL
+    assert (exe_dir / "ddraw.ini").read_text() == wrapper.build_preset()
+    assert not (root / "ddraw.dll").exists()
+    assert sorted(p.name for p in root.iterdir()) == ["Exe"]
+
+
+def test_installed_wrapper_is_where_the_launcher_looks(tmp_path: Path) -> None:
+    """Both accepted shapes satisfy ``launch.wrapper_staged`` -- the acceptance test."""
+    staging = staged_dir(tmp_path)
+    root, exe_dir = install_tree(tmp_path)
+    for target in (root, exe_dir):
+        result = wrapper.install_wrapper(target, staging)
+        assert launch.wrapper_staged(result.ddraw_dll.parent)
+        assert result.ddraw_dll.parent == result.ddraw_ini.parent == result.marker.parent
+
+
+def test_install_refuses_a_directory_without_the_exe(tmp_path: Path) -> None:
+    staging = staged_dir(tmp_path)
+    nowhere = tmp_path / "nowhere"
+    nowhere.mkdir()
+    with pytest.raises(wrapper.WrapperInstallError, match="Disciple.exe"):
+        wrapper.install_wrapper(nowhere, staging)
+    assert list(nowhere.iterdir()) == []  # not even the ini was written
+
+
+def test_install_never_creates_the_destination(tmp_path: Path) -> None:
+    staging = staged_dir(tmp_path)
+    target = tmp_path / "typo"
+    with pytest.raises(wrapper.WrapperInstallError):
+        wrapper.install_wrapper(target, staging)
+    assert not target.exists()
 
 
 def test_install_reinstalls_over_own_dll(tmp_path: Path) -> None:
     staging = staged_dir(tmp_path)
-    game = tmp_path / "game"
-    wrapper.install_wrapper(game, staging)
+    root, exe_dir = install_tree(tmp_path)
+    wrapper.install_wrapper(root, staging)
     # second install must succeed: the existing dll is ours (marker matches)
-    result = wrapper.install_wrapper(game, staging)
-    assert (game / "ddraw.dll").read_bytes() == FAKE_DLL
+    result = wrapper.install_wrapper(root, staging)
+    assert (exe_dir / "ddraw.dll").read_bytes() == FAKE_DLL
     assert result.ini_written is False  # ini already ours -> no-op
 
 
 def test_install_refuses_unmanaged_dll(tmp_path: Path) -> None:
     staging = staged_dir(tmp_path)
-    game = tmp_path / "game"
-    game.mkdir()
-    (game / "ddraw.dll").write_bytes(b"SOMEONE-ELSES-DLL")
+    root, exe_dir = install_tree(tmp_path)
+    (exe_dir / "ddraw.dll").write_bytes(b"SOMEONE-ELSES-DLL")
     with pytest.raises(wrapper.WrapperInstallError):
-        wrapper.install_wrapper(game, staging)
-    assert (game / "ddraw.dll").read_bytes() == b"SOMEONE-ELSES-DLL"  # untouched
+        wrapper.install_wrapper(root, staging)
+    assert (exe_dir / "ddraw.dll").read_bytes() == b"SOMEONE-ELSES-DLL"  # untouched
 
 
 def test_install_refuses_when_marker_disagrees(tmp_path: Path) -> None:
     staging = staged_dir(tmp_path)
-    game = tmp_path / "game"
-    game.mkdir()
-    (game / "ddraw.dll").write_bytes(FAKE_DLL)
+    root, exe_dir = install_tree(tmp_path)
+    (exe_dir / "ddraw.dll").write_bytes(FAKE_DLL)
     # marker exists but records a *different* digest -> not ours
-    (game / ".disciples-play-wrapper.json").write_text(
+    (exe_dir / ".disciples-play-wrapper.json").write_text(
         json.dumps({"ddraw_dll_sha256": "0" * 64}), encoding="utf-8"
     )
     with pytest.raises(wrapper.WrapperInstallError):
-        wrapper.install_wrapper(game, staging)
+        wrapper.install_wrapper(root, staging)
 
 
 def test_install_preserves_user_edited_ini(tmp_path: Path) -> None:
     staging = staged_dir(tmp_path)
-    game = tmp_path / "game"
-    game.mkdir()
+    root, exe_dir = install_tree(tmp_path)
     edited = "; my tweaks\nwindowed=0\n"
-    (game / "ddraw.ini").write_text(edited)
-    result = wrapper.install_wrapper(game, staging)
-    assert (game / "ddraw.ini.pre-pack").read_text() == edited
-    assert (game / "ddraw.ini").read_text() == wrapper.build_preset()
+    (exe_dir / "ddraw.ini").write_text(edited)
+    result = wrapper.install_wrapper(root, staging)
+    assert (exe_dir / "ddraw.ini.pre-pack").read_text() == edited
+    assert (exe_dir / "ddraw.ini").read_text() == wrapper.build_preset()
     assert result.ini_backed_up is True
     assert result.ini_written is True
 
 
 def test_install_backup_created_once(tmp_path: Path) -> None:
     staging = staged_dir(tmp_path)
-    game = tmp_path / "game"
-    game.mkdir()
-    (game / "ddraw.ini").write_text("; v1\n")
-    wrapper.install_wrapper(game, staging)
+    root, exe_dir = install_tree(tmp_path)
+    (exe_dir / "ddraw.ini").write_text("; v1\n")
+    wrapper.install_wrapper(root, staging)
     # simulate a later user edit, then re-install: pre-pack keeps the first version
-    (game / "ddraw.ini").write_text("; v2\n")
-    wrapper.install_wrapper(game, staging)
-    assert (game / "ddraw.ini.pre-pack").read_text() == "; v1\n"
-    assert (game / "ddraw.ini").read_text() == wrapper.build_preset()
+    (exe_dir / "ddraw.ini").write_text("; v2\n")
+    wrapper.install_wrapper(root, staging)
+    assert (exe_dir / "ddraw.ini.pre-pack").read_text() == "; v1\n"
+    assert (exe_dir / "ddraw.ini").read_text() == wrapper.build_preset()
 
 
 def test_install_requires_dll_in_staging(tmp_path: Path) -> None:
+    root, _ = install_tree(tmp_path)
     empty = tmp_path / "empty"
     empty.mkdir()
-    with pytest.raises(wrapper.WrapperInstallError):
-        wrapper.install_wrapper(tmp_path / "game", empty)
+    with pytest.raises(wrapper.WrapperInstallError, match="no ddraw.dll"):
+        wrapper.install_wrapper(root, empty)
 
 
 def test_install_respects_custom_preset(tmp_path: Path) -> None:
     staging = staged_dir(tmp_path)
-    game = tmp_path / "game"
+    root, exe_dir = install_tree(tmp_path)
     custom = "[ddraw]\nwindowed=1\nrenderer=gdi\n"
-    result = wrapper.install_wrapper(game, staging, preset=custom)
-    assert (game / "ddraw.ini").read_text() == custom
+    result = wrapper.install_wrapper(root, staging, preset=custom)
+    assert (exe_dir / "ddraw.ini").read_text() == custom
     assert result.ini_written is True

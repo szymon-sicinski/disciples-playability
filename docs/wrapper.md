@@ -13,7 +13,29 @@ functions:
 |---|---|
 | `build_preset(scale=3, maxfps=60, vsync=True, adjmouse=True, renderer="auto")` | Returns the text of the `ddraw.ini` preset. |
 | `fetch_wrapper(dest, tag="v7.1.0.0", expected_sha256=..., expected_size=..., offline_zip=None)` | Downloads (or reads `offline_zip=`) the pinned release, verifies its size and SHA-256, extracts only `ddraw.dll`, `ddraw.ini` and LICENSE-ish files (path-traversal and symlink entries refused). |
-| `install_wrapper(game_dir, staging, preset=None)` | Copies `ddraw.dll` and writes the preset (or your `preset=` text) into the game directory, with overwrite protection. |
+| `install_wrapper(game_dir, staging, preset=None)` | Resolves `game_dir` to the directory holding `Disciple.exe` (the install root or `Exe/` itself — see [where the two files go](#where-the-two-files-go)), then copies `ddraw.dll` and writes the preset (or your `preset=` text) *there* and nowhere else, with overwrite protection. A path with no `Disciple.exe` under it raises `WrapperInstallError`. |
+
+## Where the two files go
+
+`ddraw.dll` and `ddraw.ini` go in the directory that holds `Disciple.exe` —
+`Exe/` in the GOG layout — never in the install root that also holds
+`Globals/` and `Imgs1/`. That is where the game's `LoadLibrary("ddraw.dll")`
+resolves them, so it is also where `doctor` and the launcher look; a wrapper
+anywhere else is silently inert.
+
+`install_wrapper()` takes either path and resolves it with
+`wrapper.resolve_exe_dir()`, so both calls below write the same three files
+(`ddraw.dll`, `ddraw.ini` and the `.disciples-play-wrapper.json` marker) into
+`Exe/`:
+
+```python
+wrapper.install_wrapper("<install>", staging)      # install root  -> <install>/Exe/
+wrapper.install_wrapper("<install>/Exe", staging)  # exe directory  -> same place
+```
+
+A path with no `Disciple.exe` under it — neither at the path itself nor in
+`Exe/` — raises `WrapperInstallError` and writes nothing, instead of leaving a
+wrapper the launcher will never load.
 
 ## The preset
 
@@ -71,8 +93,9 @@ WINEDLLOVERRIDES="ddraw=n,b" wine Disciple.exe
 ```
 
 `n` = native (load our `ddraw.dll` from the game folder), `b` = builtin
-fallback. The DLL must sit next to `Disciple.exe` (in `Exe\` for the GOG
-layout) — that is where the game's `LoadLibrary("ddraw.dll")` resolves it.
+fallback. The DLL must sit next to `Disciple.exe` — `Exe\` in the GOG layout,
+see [where the two files go](#where-the-two-files-go) — because that is where
+the game's `LoadLibrary("ddraw.dll")` looks.
 
 ## Updating the pin
 

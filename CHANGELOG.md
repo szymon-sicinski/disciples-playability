@@ -58,6 +58,11 @@ Tag and release only after those eleven items are ticked.
 
 ### Fixed
 
+- `wrapper.install_wrapper()` no longer writes into whatever path it is given.
+  The destination is resolved to the directory holding `Disciple.exe` — the
+  install root is accepted and resolved to its `Exe/`, and a path with no
+  `Disciple.exe` under it raises `WrapperInstallError` instead of silently
+  leaving a `ddraw.dll` where neither the launcher nor `doctor` looks.
 - CLI tests no longer read the developer's exported `$DISCIPLES_GAME_DIR` or
   per-user config; every test runs against a throwaway home.
 - A top-level `--game-dir` now reaches the `data` subcommand, and `doctor` and
@@ -67,7 +72,7 @@ Tag and release only after those eleven items are ticked.
 
 ### Verified
 
-- 216 synthetic-fixture tests pass; 2 read-only tests pass against a retail
+- 226 synthetic-fixture tests pass; 2 read-only tests pass against a retail
   installation; `ruff check` and `ruff format --check` are clean.
 - `disciples-play data` runs read-only over a retail install: 314 files, 131
   dBase III tables (header arithmetic closes on all), 19 `MQDB` containers.
