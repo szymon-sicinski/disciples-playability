@@ -6,7 +6,7 @@
 > blocks describe what a correct run *would* show, not what has been observed.
 > When a recipe has been run end-to-end on a real machine, flip its section to
 > *verified* and record the machine/date in
-> [`docs/verification.md`](verification.md).
+> [`docs/verification.md`](verification.md) (created in M6).
 
 Three ways to get the same prefix. All three end at the same place: a Wine
 prefix, a `ddraw` override that routes DirectDraw to the staged `cnc-ddraw`
@@ -88,18 +88,28 @@ Bottles wraps the same Wine prefix in a GUI. The parts that matter are the
 3. **Locale**: set the bottle locale to `en_US.UTF-8` (the GOG build is
    English; a mismatch can show empty text). **DPI**: leave at 96 — cnc-ddraw
    scales, a high DPI blurs the fixed 640×480 menus.
-4. In the bottle's **"Run Executable"** (or "Open terminal"), run the pack's
-   launcher so the INI rewrite and launch happen inside the bottle's prefix:
+4. From the bottle's **"Run Executable"** (or "Open terminal"), run the pack's
+   launcher. That shell already has `wine` pointing at the bottle's runner and
+   `WINEPREFIX` set, so the launcher (which execs `wine` from `PATH`) launches
+   inside the bottle:
 
    ```bash
    disciples-play --game-dir "/path/to/Disciples Gold"
    # expected: same as §1d — the INI rewrite summary, then the game window.
    ```
 
+   From a *host* shell the launcher would pick the host's plain `wine`, not the
+   bottle's runner, so pass the bottle's runner explicitly instead:
+   `disciples-play --wine <runner>/bin/wine --game-dir …` (the runner path is
+   shown under the bottle's **Settings → Runner**).
+
 > Bottles field names shift between versions; the invariants are the bottle
 > (any), the `ddraw` override (native,builtin) and DPI 96. If a field is
 > missing, do the same thing in plain `winecfg` (see §1) against the bottle's
-> prefix, which lives under `~/.local/share/bottles/bottles/<name>`.
+> prefix. A Bottles installed via **Flatpak** (the common case) keeps bottles
+> under `~/.var/app/com.usebottles.bottles/data/bottles/<name>`; a native
+> install uses `~/.local/share/bottles/bottles/<name>`. When in doubt, read the
+> prefix path from the bottle's **Settings → Components** (or the details page).
 
 ---
 
@@ -125,12 +135,21 @@ already has.
    `ddraw.dll` staged next to `Disciple.exe`, the native DLL wins. If the game
    still opens in Proton's own mode, confirm the override is spelled exactly
    `ddraw=n,b` and that `ddraw.dll` really sits in `Exe\`.
-4. DPI: leave at 96 (same reasoning as §1c). Launch via the pack:
+4. DPI: leave at 96 (same reasoning as §1c). The pack's launcher always execs a
+   single `wine` binary — it has no Proton/`STEAM_COMPAT_*` path — so it cannot
+   launch under the Heroic Proton prefix you just configured. Use the pack for
+   the INI rewrite, then launch from Heroic itself:
 
    ```bash
-   disciples-play --game-dir "/path/to/Disciples Gold"
-   # expected: the INI rewrite summary, then the game window under Proton.
+   disciples-play --game-dir "/path/to/Disciples Gold" --no-launch
+   # expected: "rewrote 21 installation keys …" (no launch).
    ```
+
+   then press **Play** in Heroic. (To drive Proton directly from a shell instead,
+   set `STEAM_COMPAT_DATA_PATH`, `STEAM_COMPAT_CLIENT_INSTALL_PATH` and
+   `WINEDLLOVERRIDES=ddraw=n,b` and run `proton run Exe/Disciple.exe` — that is
+   the Proton equivalent of the launcher's wine exec; the pack does not do it
+   for you today.)
 
 ---
 
@@ -155,14 +174,25 @@ For any recipe, in this order:
 
 ## Producing cnc-ddraw's debug log
 
-When a run fails and you want to report upstream, cnc-ddraw writes a debug log
-**unconditionally** next to the game executable:
+The released `ddraw.dll` (v7.1.0.0 — the one these recipes install) writes **no
+log**: upstream gates `dbg_init()` behind `#ifdef _DEBUG`, so a black-screen
+triage with the release build finds no `cnc-ddraw-*.log` at all. To collect a
+log, swap in the debug build for one run only:
 
-```
-<install>/Exe/cnc-ddraw-Disciple-1.log   (rotates to -2 / -3; a .dmp on crash)
-```
+1. Download `cnc-ddraw-experimental-debuglog.zip` from upstream's releases and
+   copy *its* `ddraw.dll` over the one in `Exe\` (back up the release DLL
+   first).
+2. Reproduce the black screen, then restore the release DLL.
+3. The log is written next to the executable:
 
-Attach `cnc-ddraw-Disciple-1.log` (and the `.dmp` if present) to the upstream
-issue — the maintainers' issue template asks for exactly this file. Before
-posting, re-check the three cheap fixes above; most "black screen" reports are
-the override or the fullscreen/windowed mismatch.
+   ```
+   <install>/Exe/cnc-ddraw-Disciple-1.log   (rotates to -2 / -3; a .dmp on crash)
+   ```
+
+Attach `cnc-ddraw-Disciple-1.log` **and** the `.dmp` (if present) to the
+upstream issue — the README and
+[issue #44](https://github.com/FunkyFr3sh/cnc-ddraw/issues/44) ask for
+`cnc-ddraw-*.log` and `cnc-ddraw-*.dmp` together. The debug build is for triage
+only: it is slower and noisier, so do not leave it installed. Before posting,
+re-check the cheap fixes above; most "black screen" reports are the override or
+the fullscreen/windowed mismatch.

@@ -1,9 +1,9 @@
 """The ``doctor`` subcommand: checkable pass/fail lines for a Disciples install.
 
-``disciples-play doctor`` turns \"does this machine have what the pack needs\"
+``disciples-play doctor`` turns "does this machine have what the pack needs"
 into one line per check -- ``PASS``/``FAIL``/``WARN`` with a one-line fix hint
 -- instead of prose the user has to trust. It closes the last defect of the
-brief (\"no reproducible setup\"): a second machine is a set of checkable
+brief ("no reproducible setup"): a second machine is a set of checkable
 lines, not a hand-made prefix.
 
 Nothing here reads game content. It reports paths, sizes, counts, versions and
@@ -25,12 +25,15 @@ The checks, in output order:
 ===============  ==============================================================
 ``install``      install dir resolves to exactly one ``Exe/Disciple.exe``
 ``ini``          ``Exe/DISCIPLE.INI`` present and writable
-``ini-paths``    the 21 installation keys point at existing directories
-``wine``         ``wine`` present and reports a ``--version``
-``ddraw-override`` a ``ddraw`` override is in effect (env or staged wrapper)
+``ini-paths``    all 15 ``[Installation]`` + 6 ``[InstallationClient]`` keys
+                 present, each holding an absolute Windows path that resolves
+                 to this install (relative/empty values are a FAIL -- plan R1)
+``wine``         ``wine`` present and reports a ``--version`` (FAIL on POSIX
+                 when absent: the launcher cannot run without it)
+``ddraw-override`` a ``ddraw`` override routes ``ddraw`` to native (env or wrapper)
 ``wrapper``      cnc-ddraw staged with a marker matching the DLL's digest
 ``music``        25 ``.wav`` files in ``Music/``
-``video``        ``.smk`` cutscenes present (count and size only)
+``video``        41 ``.smk`` cutscenes (6 ``Video/`` + 35 ``Briefing/``)
 ``display``      an X display is available to verify windowing
 ===============  ==============================================================
 """
@@ -38,6 +41,7 @@ The checks, in output order:
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -58,12 +62,17 @@ WARN = "warn"
 #: special cases by hand.
 _INSTALLATION_FOLDERS = ini._INSTALLATION_FOLDERS
 
-#: Expected count of installation keys: 15 in ``[Installation]`` plus 6 in
-#: ``[InstallationClient]`` (the latter reuses six of the first fifteen).
-_EXPECTED_INSTALLATION_KEYS = 21
+#: The six keys in ``[InstallationClient]``. They are a subset of the fifteen
+#: ``[Installation]`` keys (measured on the install: globals, imgs1, sounds1,
+#: music, imgdata, briefing), so a complete INI has 15 + 6 = 21 assignments.
+_INSTALLATION_CLIENT_KEYS = ("globals", "imgs1", "sounds1", "music", "imgdata", "briefing")
 
 #: The number of ``.wav`` files a complete install ships in ``Music/``.
 _EXPECTED_MUSIC_WAVS = 25
+
+#: The number of ``.smk`` cutscenes a complete install ships: 6 in ``Video/``
+#: plus 35 in ``Briefing/``.
+_EXPECTED_VIDEO_SMKS = 41
 
 
 @dataclass(frozen=True)
@@ -204,48 +213,106 @@ def run_doctor(candidate: str | os.PathLike[str], wine_name: str = "wine") -> Re
 
 
 def _ini_paths_check(root: Path, ini_path: Path) -> Check:
-    """Check that every installation key points at an existing directory.
+    """Check that every installation key points at a directory the game can use.
 
-    The INI names folders in lowercase (``globals``) while the install has
-    them title-cased (``Globals``); that case difference is *expected* and is
-    resolved case-insensitively rather than reported as a failure.
+    The check reads each ``[Installation]``/``[InstallationClient]`` value and
+    resolves it, rather than mapping key -> canonical folder and trusting the
+    value implicitly. A complete, portable INI has all 15 ``[Installation]``
+    keys and all 6 ``[InstallationClient]`` keys present, each holding the
+    absolute Windows path the launcher writes (``<to_windows_path(root)>\\<canonical
+    folder>``, matched case-insensitively). A relative or empty value is a hard
+    failure: bare relative names launched from ``Exe`` die with "unable to load
+    fonts" (plan R1/Q1), so a value the launcher would still need to rewrite
+    must not PASS.
     """
     try:
         text = ini.read_ini(ini_path)
     except (OSError, UnicodeDecodeError) as exc:
         return Check("ini-paths", FAIL, f"cannot read {ini_path}: {exc}")
 
-    assignments = _installation_assignments(text)
-    total = len(assignments)
-    if total == 0:
-        return Check(
-            "ini-paths", FAIL, "no [Installation]/[InstallationClient] keys found in the INI"
-        )
+    by_section = _installation_assignments(text)
+    installation = by_section.get("installation", {})
+    client = by_section.get("installationclient", {})
 
-    missing: list[str] = []
-    for _, key, value in assignments:
-        folder = _INSTALLATION_FOLDERS.get(key) or _last_component(value)
-        if _dir_case_insensitive(root, folder) is None:
-            missing.append(key)
-
-    if missing:
+    missing_installation = sorted(set(_INSTALLATION_FOLDERS) - set(installation))
+    missing_client = sorted(set(_INSTALLATION_CLIENT_KEYS) - set(client))
+    if missing_installation or missing_client:
+        parts = []
+        if missing_installation:
+            parts.append(f"[Installation] {', '.join(missing_installation)}")
+        if missing_client:
+            parts.append(f"[InstallationClient] {', '.join(missing_client)}")
         return Check(
             "ini-paths",
             FAIL,
-            f"{len(missing)} of {total} installation paths are missing: {', '.join(missing)}; "
-            "run disciples-play to rewrite them to the install location",
+            "missing installation keys: " + "; ".join(parts) + "; "
+            "re-copy DISCIPLE.INI from a complete install",
         )
-    if total < _EXPECTED_INSTALLATION_KEYS:
+
+    windows_root = ini.to_windows_path(root)
+    relative: dict[str, str] = {}
+    wrong: set[str] = set()
+    missing_dir: set[str] = set()
+
+    def _record(key: str, value: str) -> None:
+        folder = _INSTALLATION_FOLDERS[key]
+        verdict = _classify_installation_value(value, root, windows_root, folder)
+        if verdict == "relative":
+            relative.setdefault(key, value)
+        elif verdict == "wrong":
+            wrong.add(key)
+        elif verdict == "missing-dir":
+            missing_dir.add(key)
+
+    # Both sections' values matter: [Installation] drives single-player,
+    # [InstallationClient] drives the network client. The two share six keys,
+    # so a per-key dict/set deduplicates rather than double-listing them.
+    for key, value in installation.items():
+        if key in _INSTALLATION_FOLDERS:
+            _record(key, value)
+    for key, value in client.items():
+        if key in _INSTALLATION_FOLDERS:
+            _record(key, value)
+
+    if relative:
+        items = [f"{key}={value or '(empty)'}" for key, value in sorted(relative.items())]
+        return Check(
+            "ini-paths",
+            FAIL,
+            "relative installation paths: "
+            + ", ".join(items)
+            + "; the game cannot load its data from relative names (plan R1); "
+            "run disciples-play to rewrite them to absolute paths",
+        )
+    if wrong:
+        return Check(
+            "ini-paths",
+            FAIL,
+            f"{len(wrong)} installation paths do not resolve to this install: "
+            + ", ".join(sorted(wrong))
+            + "; run disciples-play to rewrite them",
+        )
+    if missing_dir:
+        return Check(
+            "ini-paths",
+            FAIL,
+            "data folders missing: "
+            + ", ".join(sorted(missing_dir))
+            + "; a complete install ships these directories",
+        )
+
+    extra = sorted((set(installation) | set(client)) - set(_INSTALLATION_FOLDERS))
+    if extra:
         return Check(
             "ini-paths",
             WARN,
-            f"only {total} of {_EXPECTED_INSTALLATION_KEYS} installation keys found; "
-            "the [Installation]/[InstallationClient] sections may be incomplete",
+            f"found {len(extra)} extra installation keys ({', '.join(extra)}); ignoring them",
         )
+    total = len(installation) + len(client)
     return Check(
         "ini-paths",
         PASS,
-        f"all {total} installation paths resolve to existing directories "
+        f"all {total} installation paths are absolute and resolve to this install "
         "(the INI's lowercase names vs the install's title-case names is expected)",
     )
 
@@ -253,25 +320,31 @@ def _ini_paths_check(root: Path, ini_path: Path) -> Check:
 def _wine_check(wine_name: str) -> Check:
     wine_path = shutil.which(wine_name)
     if wine_path is None:
+        if sys.platform == "win32":
+            return Check("wine", PASS, "Windows: wine is not needed to launch")
         return Check(
             "wine",
-            WARN,
-            f"{wine_name} not found on PATH; --print-command still works, "
-            "but the game will not launch until wine is installed",
+            FAIL,
+            f"{wine_name} not found on PATH; install wine to launch the game "
+            "(--print-command still works without it)",
         )
     version = _wine_version(wine_path)
     if version is None:
-        return Check("wine", WARN, f"{wine_name} found at {wine_path} but --version failed")
+        return Check(
+            "wine",
+            FAIL,
+            f"{wine_name} found at {wine_path} but --version failed; check the wine installation",
+        )
     return Check("wine", PASS, f"{wine_name} {version} ({wine_path})")
 
 
 def _ddraw_override_check(root: Path | None, exe_dir: Path | None) -> Check:
     env_overrides = os.environ.get("WINEDLLOVERRIDES", "")
-    if "ddraw" in env_overrides.lower():
+    if launch.has_native_ddraw_override(env_overrides):
         return Check(
             "ddraw-override",
             PASS,
-            f"WINEDLLOVERRIDES={env_overrides!r} sets a ddraw override",
+            f"WINEDLLOVERRIDES={env_overrides!r} routes ddraw to native",
         )
     if root is not None and _find_file_case_insensitive(exe_dir, "ddraw.dll") is not None:
         return Check(
@@ -345,18 +418,27 @@ def _video_check(root: Path | None) -> Check:
         return Check("video", FAIL, "cannot check: install not resolved")
     video_dir = _dir_case_insensitive(root, "Video")
     briefing_dir = _dir_case_insensitive(root, "Briefing")
-    video_count, video_size = _count_files(video_dir, ".smk") if video_dir else (0, 0)
-    briefing_count, briefing_size = _count_files(briefing_dir, ".smk") if briefing_dir else (0, 0)
+    if video_dir is None or briefing_dir is None:
+        return Check(
+            "video",
+            FAIL,
+            "Video/ and/or Briefing/ directory not found; cutscenes will be missing",
+        )
+    video_count, video_size = _count_files(video_dir, ".smk")
+    briefing_count, briefing_size = _count_files(briefing_dir, ".smk")
     total = video_count + briefing_count
-    if total:
+    size = _human_size(video_size + briefing_size)
+    if total == _EXPECTED_VIDEO_SMKS:
         return Check(
             "video",
             PASS,
-            f"{total} .smk files (Video: {video_count}, Briefing: {briefing_count}; "
-            f"{_human_size(video_size + briefing_size)})",
+            f"{total} .smk files (Video: {video_count}, Briefing: {briefing_count}; {size})",
         )
     return Check(
-        "video", WARN, "no .smk videos found in Video/ or Briefing/; cutscenes will be missing"
+        "video",
+        FAIL,
+        f"{total} .smk files (expected {_EXPECTED_VIDEO_SMKS}; "
+        f"Video: {video_count}, Briefing: {briefing_count}; {size}); a full install ships 41",
     )
 
 
@@ -374,9 +456,9 @@ def _display_check() -> Check:
 # --------------------------------------------------------------------------
 
 
-def _installation_assignments(text: str) -> list[tuple[str, str, str]]:
-    """Return ``(section, key, value)`` for the two installation sections."""
-    result: list[tuple[str, str, str]] = []
+def _installation_assignments(text: str) -> dict[str, dict[str, str]]:
+    """Return ``{section: {key: value}}`` for the two installation sections."""
+    result: dict[str, dict[str, str]] = {"installation": {}, "installationclient": {}}
     section: str | None = None
     for line in ini.parse(text).lines:
         content = line.content.strip()
@@ -385,19 +467,56 @@ def _installation_assignments(text: str) -> list[tuple[str, str, str]]:
         if content.startswith("[") and content.endswith("]"):
             section = content[1:-1].strip().lower()
             continue
-        if section in ("installation", "installationclient"):
+        if section in result:
             key, sep, value = content.partition("=")
             if sep and key.strip():
-                result.append((section, key.strip().lower(), value.strip()))
+                result[section][key.strip().lower()] = value.strip()
     return result
 
 
-def _last_component(value: str) -> str:
-    stripped = value.strip().rstrip("/\\")
+def _classify_installation_value(value: str, root: Path, windows_root: str, folder: str) -> str:
+    """Classify one installation-path value: ok / relative / wrong / missing-dir."""
+    stripped = value.strip()
     if not stripped:
-        return ""
-    sep = max(stripped.rfind("/"), stripped.rfind("\\"))
-    return stripped if sep < 0 else stripped[sep + 1 :]
+        return "relative"
+    if not _is_absolute_windows(stripped):
+        return "relative"
+
+    expected = _norm_windows_path(f"{windows_root}\\{folder}")
+    if _norm_windows_path(stripped) == expected:
+        target = _dir_case_insensitive(root, folder)
+        return "ok" if target is not None else "missing-dir"
+
+    # Absolute but not the canonical value. The only mapping available without
+    # wine is the Z: fallback: a ``Z:\\...`` value that names the same directory
+    # as ``root/<folder>`` (case-insensitively) is accepted; any other absolute
+    # value is a stale path pointing somewhere else.
+    posix = _z_drive_value_to_posix(stripped)
+    if posix is not None:
+        target = _dir_case_insensitive(root, folder)
+        if target is not None and _same_dir_case_insensitive(posix, target):
+            return "ok"
+    return "wrong"
+
+
+def _is_absolute_windows(value: str) -> bool:
+    stripped = value.strip()
+    return bool(re.match(r"^[A-Za-z]:[\\/]", stripped)) or stripped.startswith(("\\\\", "//"))
+
+
+def _norm_windows_path(value: str) -> str:
+    return value.strip().replace("/", "\\").rstrip("\\").lower()
+
+
+def _z_drive_value_to_posix(value: str) -> Path | None:
+    match = re.match(r"^[Zz]:[\\/](.*)$", value.strip())
+    if not match:
+        return None
+    return Path("/" + match.group(1).replace("\\", "/"))
+
+
+def _same_dir_case_insensitive(a: Path, b: Path) -> bool:
+    return str(a.resolve()).lower() == str(b.resolve()).lower()
 
 
 def _dir_case_insensitive(root: Path, name: str) -> Path | None:

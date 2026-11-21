@@ -7,6 +7,10 @@
 # Non-destructive: the install's Exe/DISCIPLE.INI is copied to a temp dir
 # before anything runs, and restored (via a trap) when the script exits, so
 # whatever happens — including Ctrl-C — the install is left as it was found.
+# Before the matrix, the INI is rewritten to absolute paths (inplace, no .orig)
+# via `disciples-play --no-launch`, because the retail INI's relative/stale
+# values fail in-game ("unable to load fonts", plan R1/Q1) and would otherwise
+# record LAUNCH-FAILED for every combo, blaming DDraw/PaletteAnim for the INI.
 #
 # Interactive by design: it asks one question per combination, so it refuses
 # to run without a terminal rather than hang a CI job or an agent.
@@ -97,6 +101,17 @@ restore() {
     rm -rf "$WORK_DIR"
 }
 trap restore EXIT
+
+# Rewrite the INI to absolute paths before the matrix (see the header note).
+# inplace leaves no .orig behind; the trap restores the original on exit.
+if ! command -v disciples-play >/dev/null 2>&1; then
+    echo "probe-matrix.sh: disciples-play not found on PATH; install the pack first." >&2
+    exit 2
+fi
+if ! disciples-play --game-dir "$GAME_DIR" --no-launch --ini-mode inplace >/dev/null 2>&1; then
+    echo "probe-matrix.sh: disciples-play --no-launch failed; the INI was not rewritten." >&2
+    exit 2
+fi
 
 # Set paletteanim=0/1 in the INI, preserving the rest of the line (and CRLF).
 set_paletteanim() {

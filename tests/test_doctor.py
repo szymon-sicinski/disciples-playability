@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 import disciples_play.doctor as doctor
+import disciples_play.ini as ini
 from disciples_play import wrapper
 from disciples_play.__main__ import main
 
@@ -49,6 +50,9 @@ INSTALLATION_FOLDERS = [
     "Scendata",
 ]
 
+_VIDEO_CLIPS = 6
+_BRIEFING_CLIPS = 35
+
 _HEX_64 = re.compile(r"[0-9a-fA-F]{64}")
 
 
@@ -60,6 +64,18 @@ def _ini_bytes() -> bytes:
     return (FIXTURES / "sample-disciple.ini").read_bytes()
 
 
+def _relative_ini_bytes() -> bytes:
+    """A complete INI whose installation values are bare relative names -- the
+    shape plan R1/Q1 records as failing in-game ("unable to load fonts")."""
+    lines = ["[Installation]"]
+    for key, folder in ini._INSTALLATION_FOLDERS.items():
+        lines.append(f"{key}={folder}")
+    lines.append("[InstallationClient]")
+    for key in doctor._INSTALLATION_CLIENT_KEYS:
+        lines.append(f"{key}={ini._INSTALLATION_FOLDERS[key]}")
+    return ("\r\n".join(lines) + "\r\n").encode("cp1252")
+
+
 def make_install(
     base: Path,
     *,
@@ -67,21 +83,34 @@ def make_install(
     with_wrapper: bool = False,
     wrapper_digest: str | None = None,
     music: int = 25,
-    videos: int = 1,
+    video: int = _VIDEO_CLIPS,
+    briefing: int = _BRIEFING_CLIPS,
+    rewritten: bool = False,
 ) -> Path:
-    """Build a full synthetic install tree under ``base`` and return it."""
+    """Build a full synthetic install tree under ``base`` and return it.
+
+    ``rewritten=True`` writes the INI the launcher would produce (absolute
+    Windows paths), so the ``ini-paths`` check PASSes; the default (False)
+    keeps the fixture's stale ``X:\\Games\\Heroic\\…`` values, which the check
+    must FAIL.
+    """
     exe_dir = base / "Exe"
     exe_dir.mkdir(parents=True)
     if exe:
         (exe_dir / "Disciple.exe").write_bytes(b"MZ")
-    (exe_dir / "DISCIPLE.INI").write_bytes(_ini_bytes())
+    if rewritten:
+        ini_text = ini.rewrite_installation_paths(_ini_bytes(), base.resolve(), "wine")
+        (exe_dir / "DISCIPLE.INI").write_bytes(ini_text.encode("cp1252"))
+    else:
+        (exe_dir / "DISCIPLE.INI").write_bytes(_ini_bytes())
 
     for folder in INSTALLATION_FOLDERS:
         (base / folder).mkdir(exist_ok=True)
     for i in range(music):
         (base / "Music" / f"track{i:02d}.wav").write_bytes(b"\x00" * 100)
-    for i in range(videos):
+    for i in range(video):
         (base / "Video" / f"clip{i:02d}.smk").write_bytes(b"\x00" * 200)
+    for i in range(briefing):
         (base / "Briefing" / f"brief{i:02d}.smk").write_bytes(b"\x00" * 200)
 
     if with_wrapper:
@@ -98,7 +127,7 @@ def make_install(
 
 @pytest.fixture()
 def no_wine(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make ``wine`` unresolvable, so the check degrades to WARN."""
+    """Make ``wine`` unresolvable, so the check FAILs on POSIX."""
     real_which = doctor.shutil.which
 
     def which(name: str) -> str | None:
@@ -148,7 +177,7 @@ def _statuses(out: str) -> dict[str, str]:
 def test_all_pass_exits_zero(
     tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = make_install(tmp_path / "install", with_wrapper=True)
+    root = make_install(tmp_path / "install", with_wrapper=True, rewritten=True)
     code = main(["doctor", "--game-dir", str(root)])
     assert code == 0
 
@@ -167,6 +196,7 @@ def test_all_pass_exits_zero(
     }
     assert "25 .wav files in Music/" in out
     assert "wine-9.0 (synthetic)" in out
+    assert "41 .smk files" in out
 
 
 def test_missing_exe_is_a_fail(
@@ -187,7 +217,7 @@ def test_missing_exe_is_a_fail(
 def test_missing_music_is_a_fail(
     tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = make_install(tmp_path / "install", music=0)
+    root = make_install(tmp_path / "install", music=0, rewritten=True)
     code = main(["doctor", "--game-dir", str(root)])
     assert code == 1
 
@@ -197,11 +227,26 @@ def test_missing_music_is_a_fail(
     assert "PASS install:" in out  # the install itself is fine
 
 
+def test_missing_video_is_a_fail(
+    tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = make_install(tmp_path / "install", video=0, briefing=0, rewritten=True)
+    code = main(["doctor", "--game-dir", str(root)])
+    assert code == 1
+
+    out = capsys.readouterr().out
+    assert "FAIL video:" in out
+    assert "0 .smk files" in out
+    assert "PASS install:" in out
+
+
 def test_wrapper_digest_mismatch_is_a_warn(
     tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # Marker records a *different* digest than the dll on disk -> not ours.
-    root = make_install(tmp_path / "install", with_wrapper=True, wrapper_digest="0" * 64)
+    root = make_install(
+        tmp_path / "install", with_wrapper=True, wrapper_digest="0" * 64, rewritten=True
+    )
     code = main(["doctor", "--game-dir", str(root)])
     assert code == 0  # WARN does not fail the run
 
@@ -211,16 +256,18 @@ def test_wrapper_digest_mismatch_is_a_warn(
     assert "PASS ddraw-override:" in out  # the DLL being staged still counts
 
 
-def test_no_wine_is_a_warn(
+@pytest.mark.skipif(WINDOWS, reason="wine check PASSes on Windows (not needed to launch)")
+def test_no_wine_is_a_fail(
     tmp_path: Path, no_wine, with_display, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = make_install(tmp_path / "install")
+    root = make_install(tmp_path / "install", rewritten=True)
     code = main(["doctor", "--game-dir", str(root)])
-    assert code == 0  # WARN does not fail the run
+    assert code == 1  # no wine on POSIX blocks launch
 
     out = capsys.readouterr().out
-    assert "WARN wine:" in out
+    assert "FAIL wine:" in out
     assert "not found on PATH" in out
+    assert "--print-command still works" in out
 
 
 # --- exit code 2 (bad arguments) --------------------------------------------
@@ -241,13 +288,22 @@ def test_unknown_doctor_flag_exit_2(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["doctor", "--bogus"]) == 2
 
 
+def test_game_dir_before_subcommand_is_honored(
+    tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = make_install(tmp_path / "install", with_wrapper=True, rewritten=True)
+    code = main(["--game-dir", str(root), "doctor"])
+    assert code == 0  # was exit 2 "no install specified" before the fix
+    assert "PASS install:" in capsys.readouterr().out
+
+
 # --- the JSON schema ----------------------------------------------------------
 
 
 def test_json_schema_is_stable(
     tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = make_install(tmp_path / "install", with_wrapper=True)
+    root = make_install(tmp_path / "install", with_wrapper=True, rewritten=True)
     code = main(["doctor", "--game-dir", str(root), "--json"])
     assert code == 0
 
@@ -278,11 +334,23 @@ def test_json_schema_is_stable(
 def test_json_ok_is_false_when_something_fails(
     tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = make_install(tmp_path / "install", music=0)
+    root = make_install(tmp_path / "install", music=0, rewritten=True)
     code = main(["doctor", "--game-dir", str(root), "--json"])
     assert code == 1
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is False
+
+
+def test_json_ok_true_when_only_warnings(
+    tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = make_install(
+        tmp_path / "install", with_wrapper=True, wrapper_digest="0" * 64, rewritten=True
+    )
+    code = main(["doctor", "--game-dir", str(root), "--json"])
+    assert code == 0  # only a WARN, not a FAIL
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
 
 
 # --- no 64-hex string may leak, on any fixture -------------------------------
@@ -291,11 +359,11 @@ def test_json_ok_is_false_when_something_fails(
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {},
+        {"rewritten": True},
         {"exe": False},
-        {"music": 0},
-        {"with_wrapper": True, "wrapper_digest": "0" * 64},  # a real 64-hex sits in the marker
-        {"with_wrapper": True},
+        {"music": 0, "rewritten": True},
+        {"with_wrapper": True, "wrapper_digest": "0" * 64, "rewritten": True},
+        {"with_wrapper": True, "rewritten": True},
     ],
 )
 def test_output_never_contains_a_64_hex_string(
@@ -310,13 +378,13 @@ def test_output_never_contains_a_64_hex_string(
         assert code in (0, 1)
 
 
-# --- case-insensitive directory resolution -----------------------------------
+# --- ini-paths: values are resolved, not key -> folder mapped -----------------
 
 
 def test_ini_paths_resolves_folder_case_insensitively(
     tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = make_install(tmp_path / "install")
+    root = make_install(tmp_path / "install", rewritten=True)
     # Re-create one folder with a different case than the INI's canonical name;
     # the check must resolve it rather than report it missing.
     (root / "Globals").rmdir()
@@ -329,7 +397,7 @@ def test_ini_paths_resolves_folder_case_insensitively(
 def test_ini_paths_missing_folder_is_a_fail(
     tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = make_install(tmp_path / "install")
+    root = make_install(tmp_path / "install", rewritten=True)
     (root / "Scens").rmdir()  # the scenarios key's on-disk folder
     code = main(["doctor", "--game-dir", str(root)])
     assert code == 1
@@ -338,21 +406,126 @@ def test_ini_paths_missing_folder_is_a_fail(
     assert "scenarios" in out
 
 
-def test_ini_paths_incomplete_section_is_a_warn(
+def test_ini_paths_stale_values_are_a_fail(
+    tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The raw fixture's values point at X:\Games\Heroic\… (a drive that does
+    # not exist here): the defect the launcher exists to fix must not PASS.
+    root = make_install(tmp_path / "install")  # rewritten=False
+    code = main(["doctor", "--game-dir", str(root)])
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "FAIL ini-paths:" in out
+    assert "do not resolve to this install" in out
+    assert "run disciples-play" in out
+
+
+def test_ini_paths_relative_values_are_a_fail(
     tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = make_install(tmp_path / "install")
-    # Strip the [InstallationClient] section: only 15 of 21 keys remain.
-    text = _ini_bytes().decode("cp1252").split("[InstallationClient]")[0]
+    (root / "Exe" / "DISCIPLE.INI").write_bytes(_relative_ini_bytes())
+    code = main(["doctor", "--game-dir", str(root)])
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "FAIL ini-paths:" in out
+    assert "relative installation paths" in out
+    assert "unable to load fonts" not in out  # no prose about fonts leaks; the hint is the rewrite
+
+
+def test_ini_paths_missing_key_is_a_fail(
+    tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = make_install(tmp_path / "install", rewritten=True)
+    text = (root / "Exe" / "DISCIPLE.INI").read_bytes().decode("cp1252")
+    lines = [ln for ln in text.split("\r\n") if not ln.startswith("scenarios=")]
+    (root / "Exe" / "DISCIPLE.INI").write_bytes("\r\n".join(lines).encode("cp1252"))
+    code = main(["doctor", "--game-dir", str(root)])
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "FAIL ini-paths:" in out
+    assert "missing installation keys" in out
+    assert "scenarios" in out
+
+
+def test_ini_paths_missing_client_section_is_a_fail(
+    tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = make_install(tmp_path / "install", rewritten=True)
+    # Strip the whole [InstallationClient] section: the six client keys vanish.
+    text = (
+        (root / "Exe" / "DISCIPLE.INI")
+        .read_bytes()
+        .decode("cp1252")
+        .split("[InstallationClient]")[0]
+    )
     (root / "Exe" / "DISCIPLE.INI").write_bytes(text.encode("cp1252"))
     code = main(["doctor", "--game-dir", str(root)])
-    assert code == 0  # WARN does not fail the run
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "FAIL ini-paths:" in out
+    assert "missing installation keys" in out
+    assert "[InstallationClient]" in out
+
+
+def test_ini_paths_extra_key_is_a_warn(
+    tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = make_install(tmp_path / "install", rewritten=True)
+    text = (root / "Exe" / "DISCIPLE.INI").read_bytes().decode("cp1252")
+    text = text.replace("globals=", "foobar=\r\nglobals=", 1)
+    (root / "Exe" / "DISCIPLE.INI").write_bytes(text.encode("cp1252"))
+    code = main(["doctor", "--game-dir", str(root)])
+    assert code == 0  # extra keys are a WARN, not a FAIL
     out = capsys.readouterr().out
     assert "WARN ini-paths:" in out
-    assert "15 of 21" in out
+    assert "extra installation keys" in out
+    assert "foobar" in out
 
 
-# --- ddraw override from the environment --------------------------------------
+def test_ini_paths_client_section_value_is_checked(
+    tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = make_install(tmp_path / "install", rewritten=True)
+    # Corrupt only the [InstallationClient] globals value to a bare relative
+    # name; the [Installation] value stays correct. The check must catch it.
+    lines = (root / "Exe" / "DISCIPLE.INI").read_bytes().decode("cp1252").split("\r\n")
+    in_client = False
+    for i, line in enumerate(lines):
+        if line == "[InstallationClient]":
+            in_client = True
+            continue
+        if in_client and line.startswith("globals="):
+            lines[i] = "globals=Globals"
+            break
+    (root / "Exe" / "DISCIPLE.INI").write_bytes("\r\n".join(lines).encode("cp1252"))
+    code = main(["doctor", "--game-dir", str(root)])
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "FAIL ini-paths:" in out
+    assert "relative installation paths" in out
+    assert "globals=Globals" in out
+
+
+# --- ddraw override: parse the value, don't substring-match --------------------
+
+
+@pytest.mark.parametrize("override", ["ddraw=b", "ddraw=d", "ddraw=", "notddraw=n", "*=n"])
+def test_ddraw_override_rejects_non_native(
+    tmp_path: Path,
+    fake_wine,
+    with_display,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    override: str,
+) -> None:
+    monkeypatch.setenv("WINEDLLOVERRIDES", override)
+    root = make_install(tmp_path / "install", rewritten=True)  # no wrapper staged
+    code = main(["doctor", "--game-dir", str(root)])
+    assert code == 0  # a missing override is a WARN, not a FAIL
+    out = capsys.readouterr().out
+    assert "PASS ddraw-override:" not in out
+    assert "WARN ddraw-override:" in out
 
 
 def test_ddraw_override_reads_env(
@@ -363,7 +536,7 @@ def test_ddraw_override_reads_env(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setenv("WINEDLLOVERRIDES", "ddraw=n,b")
-    root = make_install(tmp_path / "install")  # no wrapper staged
+    root = make_install(tmp_path / "install", rewritten=True)  # no wrapper staged
     code = main(["doctor", "--game-dir", str(root)])
     assert code == 0
     out = capsys.readouterr().out
@@ -375,7 +548,7 @@ def test_ddraw_override_reads_env(
 
 
 def test_doctor_writes_nothing(tmp_path: Path, fake_wine, with_display) -> None:
-    root = make_install(tmp_path / "install", with_wrapper=True)
+    root = make_install(tmp_path / "install", with_wrapper=True, rewritten=True)
     before = sorted(str(p.relative_to(root)) for p in root.rglob("*"))
     ini_before = (root / "Exe" / "DISCIPLE.INI").read_bytes()
 

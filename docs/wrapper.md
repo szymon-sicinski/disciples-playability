@@ -93,10 +93,14 @@ that refusal is the safety feature working, not a bug.
 
 ## Black screen / won't start
 
-cnc-ddraw writes a debug log unconditionally next to the game executable:
+The released `ddraw.dll` (v7.1.0.0) writes **no** debug log — upstream gates
+`dbg_init()` behind `#ifdef _DEBUG`, so the file below only exists when the
+`experimental-debuglog` build's DLL is installed. For triage, swap that build
+in for one run (see the "Producing cnc-ddraw's debug log" section of
+[`wine-recipe.md`](wine-recipe.md)), then collect
 `Exe\cnc-ddraw-Disciple-1.log` (rotating to `-2`/`-3`, and a
-`cnc-ddraw-Disciple-1.dmp` crash dump on an unhandled exception). Attach that
-log when reporting an issue upstream
+`cnc-ddraw-Disciple-1.dmp` crash dump on an unhandled exception). Attach both
+the log and the `.dmp` when reporting an issue upstream
 ([issue #44](https://github.com/FunkyFr3sh/cnc-ddraw/issues/44)). Before
 reporting, try the cheap fixes in order: confirm the game is fullscreen
 (`InWindow=0`), confirm `WINEDLLOVERRIDES="ddraw=n,b"` is in effect, confirm

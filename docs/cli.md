@@ -100,7 +100,8 @@ paths). Environment for the child:
 
 * `WINEDLLOVERRIDES=ddraw=n,b` — set only when `ddraw.dll` sits next to the exe
   (the cnc-ddraw wrapper staged by M3). An existing `WINEDLLOVERRIDES` that
-  does not already mention `ddraw` is preserved and appended to.
+  does not already route `ddraw` to native (`ddraw=n…`) is preserved and
+  appended to.
 * `WINEDEBUG=-all` — set unless `-v`.
 
 The launcher waits for the game and returns its exit code.
@@ -119,12 +120,12 @@ hand-made prefix. The checks, in order:
 |---|---|
 | `install` | the install resolves to exactly one `Exe/Disciple.exe` (reports the exe dir) |
 | `ini` | `Exe/DISCIPLE.INI` present and writable |
-| `ini-paths` | all 15 `[Installation]` + 6 `[InstallationClient]` keys point at directories that exist, matched **case-insensitively** (the INI's `globals` vs the install's `Globals` is expected) |
-| `wine` | `wine` present and reports a `--version` (WARN if absent — `--print-command` still works) |
-| `ddraw-override` | a `ddraw` override is in effect: `WINEDLLOVERRIDES` in the environment, or the wrapper staged next to the exe (which the launcher overrides automatically) |
+| `ini-paths` | all 15 `[Installation]` + 6 `[InstallationClient]` keys are present and each holds an absolute Windows path that resolves to this install, matched **case-insensitively** (the INI's `globals` vs the install's `Globals` is expected). Relative/empty values are a **FAIL** — bare relative names fail in-game with "unable to load fonts" (plan R1/Q1) — as are missing keys and stale paths; extra/unknown keys are a WARN. |
+| `wine` | `wine` present and reports a `--version`. **FAIL** on POSIX when absent (the launcher cannot run without it); PASS "not needed" on Windows. |
+| `ddraw-override` | `WINEDLLOVERRIDES` routes `ddraw` to native (`ddraw=n…` — a bare `ddraw=b`/`ddraw=d`/`ddraw=` does **not** count), or the wrapper is staged next to the exe (which the launcher overrides automatically) |
 | `wrapper` | cnc-ddraw's `ddraw.dll` staged with a marker file matching its digest (mismatch → WARN "not ours, leaving it alone") |
 | `music` | 25 `.wav` files in `Music/` (count and size only) |
-| `video` | the `.smk` cutscene count (count and size only) |
+| `video` | 41 `.smk` cutscenes — 6 in `Video/` + 35 in `Briefing/` (count and size only) |
 | `display` | an X display is available (WARN "no X display: cannot verify windowing" when `DISPLAY` is unset) |
 
 **Hard rule:** the doctor reports paths, sizes, counts, versions and existence.
@@ -140,8 +141,12 @@ reduced to a matches/does-not-match verdict before it reaches the report, so a
 ```
 
 Doctor exit codes: `0` all checks passed, `1` any check failed, `2` bad
-arguments. A `WARN` never fails the run (no wine → WARN → exit `0`). The doctor
-is read-only — it never writes into the install.
+arguments. A `WARN` never fails the run, but the checks that block play are
+FAILs: a missing `wine` on POSIX is a FAIL (exit `1`), not a WARN, because the
+launcher cannot run without it. `--game-dir` may appear before or after the
+`doctor` subcommand. The doctor is read-only — it never writes into the
+install. `ok` in the JSON output is `true` when no check FAILs (WARNs do not
+flip it).
 
 ## Exit codes
 

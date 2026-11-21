@@ -117,12 +117,22 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
     doctor_parser = sub.add_parser(
         "doctor",
-        parents=[common],
         help="check this machine and install, one PASS/FAIL/WARN line per check",
         description=(
             "Check that this machine and install have what the pack needs, one "
             "line per check. Exit codes: 0 all pass, 1 any fail, 2 bad arguments."
         ),
+    )
+    # ``--game-dir`` is accepted here too (``disciples-play doctor --game-dir …``),
+    # but with ``default=argparse.SUPPRESS``: when it is given *before* the
+    # subcommand (``disciples-play --game-dir … doctor``) the parent parser has
+    # already stored it, and a plain ``default=None`` would overwrite that value
+    # with ``None``. SUPPRESS leaves the parent's value untouched.
+    doctor_parser.add_argument(
+        "--game-dir",
+        metavar="DIR",
+        default=argparse.SUPPRESS,
+        help="the install directory, or a parent of it",
     )
     doctor_parser.add_argument(
         "--json",
@@ -161,8 +171,12 @@ def load_config() -> dict[str, str]:
 
 
 def resolve_game_dir(ns: argparse.Namespace) -> str:
-    if ns.game_dir:
-        return ns.game_dir
+    # ``getattr`` rather than ``ns.game_dir``: the ``doctor`` subparser declares
+    # ``--game-dir`` with ``default=argparse.SUPPRESS``, so when it is not given
+    # there the attribute may be absent entirely and falls through to env/config.
+    game_dir = getattr(ns, "game_dir", None)
+    if game_dir:
+        return game_dir
     env = os.environ.get("DISCIPLES_GAME_DIR")
     if env:
         return env
