@@ -7,6 +7,7 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Unreleased until human verification — v0.1.0
 
 The code, the docs and the test suite are complete for v0.1.0. The tag is
+<<<<<<< HEAD
 **deliberately not pushed**: the first real in-game runs (2026-11-21) reached the
 game's start-up and died there — `Exception C0000005` at `0059559E`, identically
 with `[Disciple] InWindow=1` and `InWindow=0`, so the cause is **unresolved** and
@@ -14,6 +15,14 @@ is not display mode. Every claim that the pack makes the game playable is
 therefore still a human check listed in
 [`docs/verification.md`](docs/verification.md) and marked **UNVERIFIED**. Tag and
 release only after those eleven items are ticked.
+=======
+**deliberately not pushed**: no agent here has run the game, and every claim
+that the pack makes the game playable is a human check listed in
+[`docs/verification.md`](docs/verification.md) and marked **UNVERIFIED**. The
+maintainer's first in-game run (2026-11-21) produced one partial result and one
+hard limitation — see *Known limitations* below. Tag and release only after
+those eleven items are ticked.
+>>>>>>> _main
 
 ### Added
 
@@ -65,6 +74,10 @@ release only after those eleven items are ticked.
 - `docs/development.md` now states the INI is rewritten in place with a one-time
   `.orig` backup by default, rather than describing an always-copy behaviour
   that the launcher does not have.
+- `doctor`'s `wine` line carries a start-up hint when wine is found: "if the
+  game crashes at start-up under plain Wine, use a Proton runner (see
+  docs/wine-recipe.md)". A fixed string — no Proton detection, no behaviour
+  change.
 
 ### Fixed
 
@@ -92,7 +105,9 @@ release only after those eleven items are ticked.
 - Every in-game claim: main menu, 3× window, Alt+Enter/Alt+Tab, mouse
   targeting, palette animation, music without the CD, save/load, moving the
   install, `Config.exe`, a second prefix — see
-  [`docs/verification.md`](docs/verification.md).
+  [`docs/verification.md`](docs/verification.md). (Item 1 is a *partial*: the
+  menu was reached under Heroic + Proton-GE on 2026-11-21, but not through the
+  pack's own command, so the box stays unticked.)
 - Windows as a supported target (CI green is not a play test).
 - A one-line wrapper install: the functions exist, the CLI subcommand does not.
 - That `InWindow=0` plus cnc-ddraw gets the game past start-up: it does not, as
@@ -100,5 +115,28 @@ release only after those eleven items are ticked.
   and its cause is unresolved.
 - The `MQDB`/`.wdb` semantics still marked **H** in
   [`docs/data-layout.md`](docs/data-layout.md#open-questions).
+
+### Known limitations
+
+- **Plain-Wine start-up crash.** On the maintainer's install (2026-11-21, GOG
+  build, `wine-staging` 11.21, default `~/.wine` prefix) `Disciple.exe` dies
+  with `C0000005` at `0059559E` — a null object handed back by the graphics
+  layer — with the cnc-ddraw wrapper staged and `WINEDLLOVERRIDES=ddraw=n,b`,
+  with no wrapper at all, and with `InWindow=0` or `InWindow=1`. `DDraw=0`
+  (GDI fallback) starts and plays sound but leaves the screen black. It is a
+  limitation of plain Wine as the launch environment, not an INI problem; this
+  pack neither fixes it nor claims to.
+- **Proton plays, with either INI.** Heroic + Proton-GE, its own prefix, reaches
+  the main menu and plays with the install's **original `X:\…` INI** *and* with
+  **the pack's rewritten `Z:\…` values** (`--no-launch`, then Play in Heroic).
+  The Proton runner is what makes it run; the rewrite is what makes it portable.
+- **The pack's launcher does not drive Proton.** It execs a single `wine`
+  binary (`--wine` overrides it) and has no `STEAM_COMPAT_*` path, so the
+  supported sequence is `disciples-play --no-launch --game-dir …` and then
+  **Play** in Heroic or Lutris ([`docs/wine-recipe.md`](docs/wine-recipe.md#start-here-plain-wine-crashes-at-start-up--use-a-proton-runner)).
+- **cnc-ddraw was never loaded in those runs.** Every plain-Wine crash dump names
+  `C:\windows\system32\ddraw.dll` and `wined3d.dll`; the `ddraw.dll` staged in
+  `Exe\` never appears, so nothing here credits the wrapper with the working
+  launch.
 
 [Unreleased]: https://github.com/szymon-sicinski/disciples-playability/compare/df4c9f97...main

@@ -29,7 +29,8 @@ The checks, in output order:
                  present, each holding an absolute Windows path that resolves
                  to this install (relative/empty values are a FAIL -- plan R1)
 ``wine``         ``wine`` present and reports a ``--version`` (FAIL on POSIX
-                 when absent: the launcher cannot run without it)
+                 when absent: the launcher cannot run without it); when found,
+                 the detail points at the Proton recipe for start-up crashes
 ``ddraw-override`` a ``ddraw`` override routes ``ddraw`` to native (env or wrapper)
 ``wrapper``      cnc-ddraw staged with a marker matching the DLL's digest
 ``ini-window``   ``[Disciple] InWindow`` -- the game's own display mode. ``0`` is
@@ -359,7 +360,12 @@ def _wine_check(wine_name: str) -> Check:
             FAIL,
             f"{wine_name} found at {wine_path} but --version failed; check the wine installation",
         )
-    return Check("wine", PASS, f"{wine_name} {version} ({wine_path})")
+    return Check(
+        "wine",
+        PASS,
+        f"{wine_name} {version} ({wine_path}); if the game crashes at start-up "
+        "under plain Wine, use a Proton runner (see docs/wine-recipe.md)",
+    )
 
 
 def _ddraw_route(exe_dir: Path | None) -> tuple[str | None, str]:
