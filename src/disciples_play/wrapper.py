@@ -67,6 +67,9 @@ logger = logging.getLogger(__name__)
 CNC_DDRAW_REPO = "FunkyFr3sh/cnc-ddraw"
 CNC_DDRAW_TAG = "v7.1.0.0"
 CNC_DDRAW_ASSET = "cnc-ddraw.zip"
+#: Byte size of the pinned asset. ``fetch_wrapper`` compares ``len(data)``
+#: against this *before* the digest, so a truncated download fails with a clear
+#: size error instead of a generic "SHA-256 mismatch".
 CNC_DDRAW_SIZE = 2_688_079
 CNC_DDRAW_URL = (
     f"https://github.com/{CNC_DDRAW_REPO}/releases/download/{CNC_DDRAW_TAG}/{CNC_DDRAW_ASSET}"
@@ -116,10 +119,10 @@ PRESET_KEYS = frozenset(
     }
 )
 
-#: Values ``renderer`` accepts (upstream ``src/config.c`` documents ``auto``,
-#: ``opengl``, ``gdi``, ``direct3d9``; ``auto`` tries direct3d9/opengl and
-#: falls back to gdi).
-_RENDERERS = frozenset({"auto", "gdi", "opengl", "direct3d9"})
+#: Values ``renderer`` accepts, exactly upstream ``src/config.c``'s generated
+#: ini list: ``auto``, ``opengl``, ``openglcore``, ``gdi``, ``direct3d9``,
+#: ``direct3d9on12``. ``auto`` tries direct3d9/opengl and falls back to gdi.
+_RENDERERS = frozenset({"auto", "gdi", "opengl", "openglcore", "direct3d9", "direct3d9on12"})
 
 #: The game's fixed internal resolution, used to state the target upscale.
 _BASE_WIDTH = 640
@@ -186,9 +189,16 @@ def build_preset(
 
     The preset pins the plan's nine keys and nothing else: ``windowed=1``,
     ``maintas=1``, ``maxfps``, ``vsync``, ``adjmouse``, ``savesettings=1``,
-    ``nonexclusive=1``, ``hook=1`` and ``renderer``. A leading comment block
+    ``nonexclusive=1``, ``hook=4`` and ``renderer``. A leading comment block
     names the pack version, the cnc-ddraw tag and the two hotkeys a user needs
     (Alt+Enter toggles, Ctrl+Tab releases the cursor).
+
+    ``hook=4`` (upstream's own default) is deliberate for this game:
+    ``Disciple.exe`` does not import ``ddraw`` -- ``HA312W32.DLL`` loads it by
+    name -- so the narrow ``hook=1`` (patch only the main executable's import
+    table) would patch nothing that draws. Mode 4 enumerates the loaded modules
+    and patches every *local* one, which is what carries ``adjmouse``, cursor
+    clipping and the ``PeekMessage`` filter to the DLL that owns the window.
 
     ``scale`` is the plan's target integer upscale (3 -> 1920x1440). Upstream
     has no ``scale=`` key: the scaling itself comes from ``windowed=1`` plus
@@ -229,7 +239,7 @@ def build_preset(
             f"adjmouse={_bool(adjmouse)}\n",
             "savesettings=1\n",
             "nonexclusive=1\n",
-            "hook=1\n",
+            "hook=4\n",
             f"renderer={renderer}\n",
         ]
     )
@@ -240,17 +250,19 @@ def fetch_wrapper(
     dest: str | os.PathLike[str],
     tag: str = CNC_DDRAW_TAG,
     expected_sha256: str = CNC_DDRAW_SHA256,
+    expected_size: int | None = CNC_DDRAW_SIZE,
     offline_zip: str | os.PathLike[str] | None = None,
 ) -> list[str]:
     """Fetch the pinned cnc-ddraw release and stage the files we ship.
 
     The release asset is downloaded with :mod:`urllib` (or read from
-    ``offline_zip`` for air-gapped machines) and its SHA-256 is verified
-    *before* anything is extracted; a mismatch, a failed download or a redirect
-    to a non-GitHub host raises :class:`WrapperFetchError`. Only ``ddraw.dll``,
-    ``ddraw.ini`` and LICENSE-ish files are extracted into ``dest`` (created
-    only after verification), with path-traversal entries (``..``, absolute)
-    rejected.
+    ``offline_zip`` for air-gapped machines) and verified *before* anything is
+    extracted: its byte size is compared against ``expected_size``, then its
+    SHA-256 against ``expected_sha256``. A size or digest mismatch, a failed
+    download or a redirect to a non-GitHub host raises :class:`WrapperFetchError`.
+    Only ``ddraw.dll``, ``ddraw.ini`` and LICENSE-ish files are extracted into
+    ``dest`` (created only after verification), with path-traversal entries
+    (``..``, absolute) and symlink entries rejected.
 
     Returns the list of entry names written, relative to the archive.
     """
@@ -265,6 +277,12 @@ def fetch_wrapper(
     else:
         data, _ = _download(_release_url(tag))
 
+    if expected_size is not None and len(data) != expected_size:
+        raise WrapperFetchError(
+            f"unexpected size for cnc-ddraw {tag}: expected {expected_size} bytes, "
+            f"got {len(data)} (download refused, nothing extracted)"
+        )
+
     digest = hashlib.sha256(data).hexdigest()
     if digest != expected_sha256.lower():
         raise WrapperFetchError(
@@ -278,6 +296,7 @@ def fetch_wrapper(
 def install_wrapper(
     game_dir: str | os.PathLike[str],
     staging: str | os.PathLike[str],
+    preset: str | None = None,
 ) -> InstallResult:
     """Install the staged wrapper into ``game_dir`` on an explicit call only.
 
@@ -285,10 +304,19 @@ def install_wrapper(
       was not written by this pack -- judged by comparing its SHA-256 against
       the marker file ``.disciples-play-wrapper.json`` -- is refused with
       :class:`WrapperInstallError`; our own file is overwritten freely.
-    * ``ddraw.ini`` is written from :func:`build_preset`. A file that differs
-      from the preset is treated as user-edited: it is backed up to
-      ``ddraw.ini.pre-pack`` (created once, never overwritten) before ours is
-      written. A byte-identical file is left untouched.
+    * ``ddraw.ini`` is written from ``preset``, or :func:`build_preset` when
+      ``preset`` is ``None``. A file that differs from the text being written
+      is backed up to ``ddraw.ini.pre-pack`` (created once, never overwritten)
+      before ours is written; a byte-identical file is left untouched.
+
+    The ``ddraw.ini`` staged by :func:`fetch_wrapper` is upstream's reference
+    template and is *not* installed: the game's ``ddraw.ini`` is always our
+    preset (or the caller's ``preset=``).
+
+    One wrinkle worth naming: because the preset sets ``savesettings=1``,
+    cnc-ddraw writes its own geometry back into ``[ddraw]`` on exit, so a file
+    that "differs from the preset" on a later install is usually cnc-ddraw's
+    saved state rather than a human edit -- the backup preserves it either way.
     """
     game_dir = Path(game_dir)
     staging = Path(staging)
@@ -315,7 +343,8 @@ def install_wrapper(
     _write_marker(marker, new_digest)
     logger.info("installed ddraw.dll into %s", game_dir)
 
-    ini_backed_up, ini_written = _install_ini(game_dir / "ddraw.ini", build_preset())
+    ini_text = preset if preset is not None else build_preset()
+    ini_backed_up, ini_written = _install_ini(game_dir / "ddraw.ini", ini_text)
     return InstallResult(
         ddraw_dll=target_dll,
         ddraw_ini=game_dir / "ddraw.ini",
@@ -369,29 +398,66 @@ class _HostAllowlistRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 def _extract(data: bytes, dest: Path) -> list[str]:
-    """Extract the wanted entries from ``data`` into ``dest``, safely."""
+    """Extract the wanted entries from ``data`` into ``dest``, safely.
+
+    Every entry name is validated (and symlink entries refused) and every
+    wanted member is read fully into memory -- which validates its CRC-32 --
+    *before* any byte is written, so a hostile entry, a symlink or a corrupt
+    member (bad CRC with an intact central directory) can neither escape
+    ``dest`` nor leave a half-written file behind. ``BadZipFile`` and
+    ``OSError`` anywhere on that path are mapped to :class:`WrapperFetchError`.
+    """
     try:
         archive = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile as exc:
         raise WrapperFetchError(f"release asset is not a valid zip: {exc}") from exc
 
-    extracted: list[str] = []
     with archive:
+        # Pass 1: validate every entry name and read the wanted members fully
+        # into memory (reading validates each member's CRC-32), writing nothing.
+        # A zip-slip/absolute entry, a symlink, or a corrupt member is rejected
+        # before any byte reaches disk, so a bad archive cannot leave a partial
+        # file behind.
+        wanted: list[tuple[Path, str, bytes]] = []
         for member in archive.infolist():
             name = member.filename
             if name.endswith(("/", "\\")):
                 continue  # directory entry
-            # Validate the path of every file entry, wanted or not: a zip-slip
-            # entry must be rejected, never silently skipped.
-            target = _safe_target(dest, name)
+            target = _safe_target(dest, name)  # raises on traversal/absolute
+            if _is_symlink(member):
+                raise WrapperFetchError(f"refusing symlink zip entry {name!r}")
             base = name.replace("\\", "/").rsplit("/", 1)[-1].lower()
             if base not in _WANTED_FILES and not base.startswith(_LEGAL_PREFIXES):
                 continue
-            dest.mkdir(parents=True, exist_ok=True)
-            with archive.open(member) as src, target.open("wb") as out:
-                shutil.copyfileobj(src, out)
+            try:
+                with archive.open(member) as src:
+                    content = src.read()
+            except (zipfile.BadZipFile, OSError) as exc:
+                raise WrapperFetchError(
+                    f"failed to read {name!r} from the release archive: {exc}"
+                ) from exc
+            wanted.append((target, name, content))
+
+        if not wanted:
+            return []
+
+        # Pass 2: write. The destination is only created once every wanted
+        # entry has been validated and read successfully.
+        dest.mkdir(parents=True, exist_ok=True)
+        extracted: list[str] = []
+        for target, name, content in wanted:
+            try:
+                target.write_bytes(content)
+            except OSError as exc:
+                raise WrapperFetchError(f"failed to write {name!r} into {dest}: {exc}") from exc
             extracted.append(name)
     return extracted
+
+
+def _is_symlink(member: zipfile.ZipInfo) -> bool:
+    """True when the zip entry is a symlink (Unix ``S_IFLNK`` file type)."""
+    mode = (member.external_attr >> 16) & 0o170000
+    return mode == 0o120000
 
 
 def _safe_target(dest: Path, name: str) -> Path:

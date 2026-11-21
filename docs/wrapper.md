@@ -12,8 +12,8 @@ functions:
 | Function | What it does |
 |---|---|
 | `build_preset(scale=3, maxfps=60, vsync=True, adjmouse=True, renderer="auto")` | Returns the text of the `ddraw.ini` preset. |
-| `fetch_wrapper(dest, tag="v7.1.0.0", expected_sha256=..., offline_zip=None)` | Downloads (or reads `offline_zip=`) the pinned release, verifies its SHA-256, extracts only `ddraw.dll`, `ddraw.ini` and LICENSE-ish files. |
-| `install_wrapper(game_dir, staging)` | Copies `ddraw.dll` and writes the preset into the game directory, with overwrite protection. |
+| `fetch_wrapper(dest, tag="v7.1.0.0", expected_sha256=..., expected_size=..., offline_zip=None)` | Downloads (or reads `offline_zip=`) the pinned release, verifies its size and SHA-256, extracts only `ddraw.dll`, `ddraw.ini` and LICENSE-ish files (path-traversal and symlink entries refused). |
+| `install_wrapper(game_dir, staging, preset=None)` | Copies `ddraw.dll` and writes the preset (or your `preset=` text) into the game directory, with overwrite protection. |
 
 ## The preset
 
@@ -26,7 +26,7 @@ vsync=1
 adjmouse=1
 savesettings=1
 nonexclusive=1
-hook=1
+hook=4
 renderer=auto
 ```
 
@@ -38,10 +38,15 @@ records the 3× target, 1920×1440).
 
 Notes on two keys a human may want to tune after the first run:
 
-- **`hook=1`** hooks only the *main executable's* import table. cnc-ddraw's
-  default is `hook=4`, which also enumerates and hooks the game's helper DLLs
-  (`SHW32.DLL` etc. — where this game's drawing lives). If the image is
-  missing, black or won't scale, try `hook=4` first.
+- **`hook=4`** (upstream's own default) is pinned, not `hook=1`, because of how
+  this game is built. `Disciple.exe` does **not** import `ddraw.dll` —
+  `HA312W32.DLL` loads it by name and owns the window. `hook=1` patches only
+  the main executable's import table, so it would patch nothing that draws and
+  `adjmouse`, cursor clipping and the `PeekMessage` filter would silently do
+  nothing. Mode 4 enumerates the loaded modules and patches every *local* one,
+  which is what reaches `HA312W32.DLL`. (cnc-ddraw deliberately skips modules
+  named `Shw32`/`SH33W32` — the "don't hook reshade/swiftshader/mesa" guard —
+  so `SHW32.DLL` is not patched either way.)
 - **Crisp integer pixels** (`boxing=true`, "windowboxing / integer scaling") or
   `shader=Nearest neighbor` are the knobs for "integer-scaled, not blurry"
   (§8 item 2 of the plan). They are deliberately *not* in the preset so the
@@ -71,8 +76,10 @@ layout) — that is where the game's `LoadLibrary("ddraw.dll")` resolves it.
 
 ## Updating the pin
 
-The release is pinned by tag **and** SHA-256, so a re-tagged or replaced asset
-upstream cannot silently change what users run. To move to a new release:
+The release is pinned by tag, byte size **and** SHA-256, so a re-tagged or
+replaced asset upstream cannot silently change what users run. `fetch_wrapper`
+checks the size first (a truncated download gets a clear size error) and then
+the digest. To move to a new release:
 
 1. Download the new `cnc-ddraw.zip` by hand and run `sha256sum` on it — never
    trust a digest in prose, and never let the code accept an unmeasured one.
@@ -92,8 +99,9 @@ cnc-ddraw writes a debug log unconditionally next to the game executable:
 log when reporting an issue upstream
 ([issue #44](https://github.com/FunkyFr3sh/cnc-ddraw/issues/44)). Before
 reporting, try the cheap fixes in order: confirm the game is fullscreen
-(`InWindow=0`), confirm `WINEDLLOVERRIDES="ddraw=n,b"` is in effect, and try
-`hook=4` and/or `renderer=gdi` (the fallback renderer).
+(`InWindow=0`), confirm `WINEDLLOVERRIDES="ddraw=n,b"` is in effect, confirm
+`hook=4` is in effect (the preset default), and try `renderer=gdi` (the
+fallback renderer — install it via `install_wrapper(..., preset=build_preset(renderer="gdi"))`).
 
 ## Licence
 

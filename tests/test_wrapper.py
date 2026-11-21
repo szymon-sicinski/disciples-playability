@@ -47,6 +47,35 @@ def make_zip_with(extra: dict[str, bytes]) -> bytes:
     return buf.getvalue()
 
 
+def make_zip_with_symlink() -> bytes:
+    """Build a zip whose ``ddraw.ini`` member is a symlink (``S_IFLNK``)."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("ddraw.dll", FAKE_DLL)
+        info = zipfile.ZipInfo("ddraw.ini")
+        info.external_attr = 0o120777 << 16  # S_IFLNK file type, rwxrwxrwx
+        zf.writestr(info, "/etc/passwd")
+    return buf.getvalue()
+
+
+def make_zip_with_corrupt_payload() -> bytes:
+    """Build a zip whose central directory is intact but a member's CRC is bad.
+
+    The ``ddraw.dll`` payload is written *stored* (uncompressed) so its bytes
+    appear verbatim, then one byte is flipped: reading the member fails its
+    CRC-32 check with ``BadZipFile`` while the central directory still parses.
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
+        zf.writestr("ddraw.dll", FAKE_DLL)
+        zf.writestr("ddraw.ini", "[ddraw]\nwindowed=false\n")
+    data = bytearray(buf.getvalue())
+    idx = data.find(FAKE_DLL)
+    assert idx != -1, "FAKE_DLL not found verbatim in the stored archive"
+    data[idx] ^= 0xFF
+    return bytes(data)
+
+
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -83,7 +112,7 @@ def test_preset_parses_as_ini_and_uses_only_documented_keys() -> None:
     assert section["adjmouse"] == "1"
     assert section["savesettings"] == "1"
     assert section["nonexclusive"] == "1"
-    assert section["hook"] == "1"
+    assert section["hook"] == "4"
     assert section["renderer"] == "auto"
 
 
@@ -129,6 +158,12 @@ def test_preset_rejects_unknown_renderer() -> None:
         wrapper.build_preset(renderer="vulkan")
 
 
+@pytest.mark.parametrize("renderer", sorted(wrapper._RENDERERS))
+def test_preset_accepts_every_upstream_renderer(renderer: str) -> None:
+    text = wrapper.build_preset(renderer=renderer)
+    assert f"renderer={renderer}\n" in text
+
+
 def test_preset_rejects_bad_maxfps() -> None:
     with pytest.raises(ValueError):
         wrapper.build_preset(maxfps=-2)
@@ -141,7 +176,10 @@ def test_fetch_extracts_only_wanted_files(tmp_path: Path) -> None:
     data = make_zip()
     staged = tmp_path / "staging"
     result = wrapper.fetch_wrapper(
-        staged, offline_zip=write_zip(tmp_path / "asset.zip", data), expected_sha256=digest(data)
+        staged,
+        offline_zip=write_zip(tmp_path / "asset.zip", data),
+        expected_sha256=digest(data),
+        expected_size=len(data),
     )
     assert sorted(result) == ["LICENSE.txt", "ddraw.dll", "ddraw.ini"]
     assert (staged / "ddraw.dll").read_bytes() == FAKE_DLL
@@ -157,7 +195,10 @@ def test_fetch_digest_mismatch_raises_and_extracts_nothing(tmp_path: Path) -> No
     staged = tmp_path / "staging"
     with pytest.raises(wrapper.WrapperFetchError):
         wrapper.fetch_wrapper(
-            staged, offline_zip=write_zip(tmp_path / "asset.zip", data), expected_sha256="0" * 64
+            staged,
+            offline_zip=write_zip(tmp_path / "asset.zip", data),
+            expected_sha256="0" * 64,
+            expected_size=len(data),
         )
     assert not staged.exists()  # nothing staged on mismatch
 
@@ -170,6 +211,7 @@ def test_fetch_rejects_zip_slip_entry(tmp_path: Path) -> None:
             staged,
             offline_zip=write_zip(tmp_path / "asset.zip", data),
             expected_sha256=digest(data),
+            expected_size=len(data),
         )
     assert not (tmp_path / "evil.dll").exists()
     assert not (tmp_path.parent / "evil.dll").exists()
@@ -182,6 +224,7 @@ def test_fetch_rejects_absolute_entry(tmp_path: Path) -> None:
             tmp_path / "staging",
             offline_zip=write_zip(tmp_path / "asset.zip", data),
             expected_sha256=digest(data),
+            expected_size=len(data),
         )
 
 
@@ -197,7 +240,48 @@ def test_fetch_rejects_invalid_zip(tmp_path: Path) -> None:
             tmp_path / "staging",
             offline_zip=write_zip(tmp_path / "asset.zip", data),
             expected_sha256=digest(data),
+            expected_size=len(data),
         )
+
+
+def test_fetch_rejects_size_mismatch(tmp_path: Path) -> None:
+    data = make_zip()
+    staged = tmp_path / "staging"
+    with pytest.raises(wrapper.WrapperFetchError, match="unexpected size"):
+        wrapper.fetch_wrapper(
+            staged,
+            offline_zip=write_zip(tmp_path / "asset.zip", data),
+            expected_sha256=digest(data),
+            expected_size=len(data) + 1,
+        )
+    assert not staged.exists()  # nothing staged on size mismatch
+
+
+def test_fetch_rejects_symlink_entry(tmp_path: Path) -> None:
+    data = make_zip_with_symlink()
+    staged = tmp_path / "staging"
+    with pytest.raises(wrapper.WrapperFetchError, match="symlink"):
+        wrapper.fetch_wrapper(
+            staged,
+            offline_zip=write_zip(tmp_path / "asset.zip", data),
+            expected_sha256=digest(data),
+            expected_size=len(data),
+        )
+    assert not (staged / "ddraw.ini").exists()  # symlink refused, nothing written
+
+
+def test_fetch_corrupt_payload_raises_and_leaves_nothing(tmp_path: Path) -> None:
+    data = make_zip_with_corrupt_payload()
+    staged = tmp_path / "staging"
+    with pytest.raises(wrapper.WrapperFetchError):
+        wrapper.fetch_wrapper(
+            staged,
+            offline_zip=write_zip(tmp_path / "asset.zip", data),
+            expected_sha256=digest(data),
+            expected_size=len(data),
+        )
+    # The corrupt member (bad CRC) must not leave a half-written ddraw.dll.
+    assert not (staged / "ddraw.dll").exists()
 
 
 def test_allowed_host_accepts_github_and_rejects_foreign() -> None:
@@ -291,3 +375,12 @@ def test_install_requires_dll_in_staging(tmp_path: Path) -> None:
     empty.mkdir()
     with pytest.raises(wrapper.WrapperInstallError):
         wrapper.install_wrapper(tmp_path / "game", empty)
+
+
+def test_install_respects_custom_preset(tmp_path: Path) -> None:
+    staging = staged_dir(tmp_path)
+    game = tmp_path / "game"
+    custom = "[ddraw]\nwindowed=1\nrenderer=gdi\n"
+    result = wrapper.install_wrapper(game, staging, preset=custom)
+    assert (game / "ddraw.ini").read_text() == custom
+    assert result.ini_written is True
