@@ -89,3 +89,4 @@ desktop.ini
 # --- Local scratch ----------------------------------------------------------
 *.log
 !tests/fixtures/**/*.log
+.pytest-scratch/
