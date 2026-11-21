@@ -135,7 +135,9 @@ _MARKER_FILENAME = ".disciples-play-wrapper.json"
 #: The executable whose *directory* is the only place the wrapper is loaded
 #: from: ``HA312W32.DLL`` calls ``LoadLibrary("ddraw.dll")``, which resolves
 #: against the running executable's directory. Spelled and matched as
-#: :func:`disciples_play.launch.resolve_install` finds it, so the two agree.
+#: :func:`disciples_play.launch.resolve_install` finds it, so the names match.
+#: The two differ by design on a mixed tree: ``launch`` picks ``Exe/`` silently,
+#: :func:`resolve_exe_dir` refuses it rather than installing in either place.
 _EXE_NAME = "Disciple.exe"
 
 #: The GOG layout's subdirectory holding the executable, under the install root
@@ -323,7 +325,8 @@ def resolve_exe_dir(target: str | os.PathLike[str]) -> Path:
     install the wrapper in the root while ``launch`` uses ``<root>/Exe`` as the
     exe directory and looks for ``ddraw.dll`` there, leaving it inert; guessing
     is worse than asking, so the caller passes the intended directory's exact
-    path (e.g. ``target/Exe``, after removing the stray copy if it is wrong).
+    path: ``target/Exe`` works with the stray still in the root; if the stray
+    copy is the wrong one, remove it and re-run with the root.
 
     Anything else raises :class:`WrapperInstallError` naming both paths that
     were tried.
@@ -362,7 +365,9 @@ def install_wrapper(
     the destination is always resolved to the executable's directory first, so
     the install root cannot become a home for a DLL the launcher will never
     load. A directory that holds ``Disciple.exe`` in neither shape raises
-    :class:`WrapperInstallError` and nothing is written.
+    :class:`WrapperInstallError` and nothing is written, and so does a *mixed*
+    tree -- the executable in both the root and ``Exe/`` -- because
+    :func:`resolve_exe_dir` refuses the ambiguity rather than guessing.
 
     * ``ddraw.dll`` is copied from ``staging``. An existing ``ddraw.dll`` that
       was not written by this pack -- judged by comparing its SHA-256 against
