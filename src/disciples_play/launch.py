@@ -314,6 +314,32 @@ def wrapper_staged(exe_dir: Path) -> bool:
     return any(p.is_file() and p.name.lower() == _DDRAW_DLL for p in exe_dir.iterdir())
 
 
+def has_native_ddraw_override(env_overrides: str) -> bool:
+    """True when a ``WINEDLLOVERRIDES`` value routes ``ddraw`` to native.
+
+    The value is a ``;``-separated list of ``lib=type`` entries, where ``lib``
+    may be a comma-separated list and ``type`` a comma-separated list (``n`` =
+    native, ``b`` = builtin, ``d`` = disabled). This requires an entry whose
+    library is exactly ``ddraw`` and whose type list contains ``n``: ``ddraw=b``
+    (builtin only, the wrapper never loads), ``ddraw=d`` (native disabled),
+    ``ddraw=`` (empty) and ``notddraw=n`` (a different library) all return
+    False, as does a wildcard ``*=n`` (not a specific ``ddraw`` entry).
+
+    The doctor and the launcher share this so the two can never drift apart on
+    what "the override is in effect" means.
+    """
+    for entry in env_overrides.split(";"):
+        entry = entry.strip()
+        if "=" not in entry:
+            continue
+        libs, _, types = entry.partition("=")
+        if any(lib.strip().lower() == "ddraw" for lib in libs.split(",")):
+            type_list = [t.strip().lower() for t in types.split(",")]
+            if "n" in type_list:
+                return True
+    return False
+
+
 def resolve_wine(wine: str | None) -> str | None:
     """Return the wine executable to run, or ``None`` when it cannot be found.
 
@@ -332,7 +358,7 @@ def build_env(install: Install, verbose: bool) -> dict[str, str]:
     env = os.environ.copy()
     if wrapper_staged(install.exe_dir):
         existing = env.get("WINEDLLOVERRIDES", "")
-        if "ddraw" not in existing.lower():
+        if not has_native_ddraw_override(existing):
             env["WINEDLLOVERRIDES"] = (
                 f"{existing};{_DDRAW_OVERRIDE}" if existing else _DDRAW_OVERRIDE
             )

@@ -11,6 +11,9 @@ contract, documented here and in ``docs/cli.md``:
 * ``3`` -- rewrite refused (INI not writable, copy-tree target exists)
 * ``4`` -- wine not found (launch only)
 
+The ``doctor`` subcommand has its own contract: ``0`` all checks passed, ``1``
+any check failed, ``2`` bad arguments (see ``docs/cli.md``).
+
 The install may be given three ways, in priority order: ``--game-dir``, the
 ``DISCIPLES_GAME_DIR`` environment variable, or a config file at
 ``<config-dir>/disciples-play/config.ini`` (``game_dir=...`` and optional
@@ -26,7 +29,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import __version__, ini, launch
+from . import __version__, doctor, ini, launch
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +41,19 @@ EXIT_DATA_INCOMPLETE = 1  # `data`: at least one file could not be parsed
 
 
 def build_parser() -> argparse.ArgumentParser:
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--game-dir",
+        metavar="DIR",
+        help=(
+            "the install directory, or a parent of it (a retail folder copied in "
+            "as a folder one or two levels down is found automatically)"
+        ),
+    )
+
     parser = argparse.ArgumentParser(
         prog="disciples-play",
+        parents=[common],
         description=(
             "Make a Disciples: Sacred Lands Gold install portable and launch it "
             "under Wine. Requires the game files you already own."
@@ -50,14 +64,6 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument(
-        "--game-dir",
-        metavar="DIR",
-        help=(
-            "the install directory, or a parent of it (a retail folder copied in "
-            "as a folder one or two levels down is found automatically)"
-        ),
-    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--dry-run",
@@ -129,6 +135,30 @@ def build_parser() -> argparse.ArgumentParser:
     data_parser.add_argument(
         "--json", action="store_true", help="emit the report as JSON instead of text"
     )
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="check this machine and install, one PASS/FAIL/WARN line per check",
+        description=(
+            "Check that this machine and install have what the pack needs, one "
+            "line per check. Exit codes: 0 all pass, 1 any fail, 2 bad arguments."
+        ),
+    )
+    # ``--game-dir`` is accepted here too (``disciples-play doctor --game-dir …``),
+    # but with ``default=argparse.SUPPRESS``: when it is given *before* the
+    # subcommand (``disciples-play --game-dir … doctor``) the parent parser has
+    # already stored it, and a plain ``default=None`` would overwrite that value
+    # with ``None``. SUPPRESS leaves the parent's value untouched.
+    doctor_parser.add_argument(
+        "--game-dir",
+        metavar="DIR",
+        default=argparse.SUPPRESS,
+        help="the install directory, or a parent of it",
+    )
+    doctor_parser.add_argument(
+        "--json",
+        action="store_true",
+        help='emit a stable JSON schema ({"checks": [{"id","status","detail"}...], "ok": bool})',
+    )
     return parser
 
 
@@ -161,8 +191,12 @@ def load_config() -> dict[str, str]:
 
 
 def resolve_game_dir(ns: argparse.Namespace) -> str:
-    if ns.game_dir:
-        return ns.game_dir
+    # ``getattr`` rather than ``ns.game_dir``: the ``doctor`` subparser declares
+    # ``--game-dir`` with ``default=argparse.SUPPRESS``, so when it is not given
+    # there the attribute may be absent entirely and falls through to env/config.
+    game_dir = getattr(ns, "game_dir", None)
+    if game_dir:
+        return game_dir
     env = os.environ.get("DISCIPLES_GAME_DIR")
     if env:
         return env
@@ -213,6 +247,23 @@ def run(ns: argparse.Namespace) -> int:
 
     cmd = launch.build_launch(result.install, ns.wine or "wine", ns.verbose)
     return launch.launch(cmd)
+
+
+def run_doctor_cli(ns: argparse.Namespace) -> int:
+    """Run the ``doctor`` subcommand and return its exit code (0/1/2)."""
+    try:
+        candidate = resolve_game_dir(ns)
+    except launch.CliError as exc:  # no install source specified -> bad arguments
+        print(f"disciples-play: {exc.message}", file=sys.stderr)
+        return exc.exit_code
+
+    report = doctor.run_doctor(candidate)
+    if ns.json:
+        print(json.dumps(report.to_dict()))
+    else:
+        for check in report.checks:
+            print(f"{check.status.upper()} {check.id}: {check.detail}")
+    return report.exit_code()
 
 
 def _configure_logging(verbose: bool, quiet: bool) -> None:
@@ -288,8 +339,11 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit as exc:  # --help/--version exit 0; bad arguments exit 2
         return int(exc.code or EXIT_OK)
 
-    if getattr(ns, "command", None) == "data":
+    command = getattr(ns, "command", None)
+    if command == "data":
         return _data_main(ns)
+    if command == "doctor":
+        return run_doctor_cli(ns)
 
     _configure_logging(ns.verbose, ns.quiet)
     try:

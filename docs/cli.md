@@ -17,6 +17,7 @@ disciples-play [--game-dir DIR] [--dry-run | --print-command] [--wine PATH]
                [--path-style wine|relative]
                [--ini-mode backup|inplace|copy-tree]
                [--no-launch] [-v | -q]
+disciples-play doctor [--game-dir DIR] [--json]
 disciples-play data [--game-dir DIR] [--json]
 disciples-play --version
 ```
@@ -99,10 +100,53 @@ paths). Environment for the child:
 
 * `WINEDLLOVERRIDES=ddraw=n,b` — set only when `ddraw.dll` sits next to the exe
   (the cnc-ddraw wrapper staged by M3). An existing `WINEDLLOVERRIDES` that
-  does not already mention `ddraw` is preserved and appended to.
+  does not already route `ddraw` to native (`ddraw=n…`) is preserved and
+  appended to.
 * `WINEDEBUG=-all` — set unless `-v`.
 
 The launcher waits for the game and returns its exit code.
+
+## The `doctor` subcommand
+
+```bash
+disciples-play doctor --game-dir "/path/to/Disciples Gold" [--json]
+```
+
+Reports one line per check — `PASS`/`FAIL`/`WARN` with a one-line fix hint —
+instead of prose, so a second machine is a set of checkable lines rather than a
+hand-made prefix. The checks, in order:
+
+| Check | What it verifies |
+|---|---|
+| `install` | the install resolves to exactly one `Exe/Disciple.exe` (reports the exe dir) |
+| `ini` | `Exe/DISCIPLE.INI` present and writable |
+| `ini-paths` | all 15 `[Installation]` + 6 `[InstallationClient]` keys are present and each holds an absolute Windows path that resolves to this install, matched **case-insensitively** (the INI's `globals` vs the install's `Globals` is expected). Relative/empty values are a **FAIL** — bare relative names fail in-game with "unable to load fonts" (plan R1/Q1) — as are missing keys and stale paths; extra/unknown keys are a WARN. |
+| `wine` | `wine` present and reports a `--version`. **FAIL** on POSIX when absent (the launcher cannot run without it); PASS "not needed" on Windows. |
+| `ddraw-override` | `WINEDLLOVERRIDES` routes `ddraw` to native (`ddraw=n…` — a bare `ddraw=b`/`ddraw=d`/`ddraw=` does **not** count), or the wrapper is staged next to the exe (which the launcher overrides automatically) |
+| `wrapper` | cnc-ddraw's `ddraw.dll` staged with a marker file matching its digest (mismatch → WARN "not ours, leaving it alone") |
+| `music` | 25 `.wav` files in `Music/` (count and size only) |
+| `video` | 41 `.smk` cutscenes — 6 in `Video/` + 35 in `Briefing/` (count and size only) |
+| `display` | an X display is available (WARN "no X display: cannot verify windowing" when `DISPLAY` is unset) |
+
+**Hard rule:** the doctor reports paths, sizes, counts, versions and existence.
+It never prints a hash of a game binary and never dumps content. The one digest
+it computes (the staged `ddraw.dll`, compared against the marker file) is
+reduced to a matches/does-not-match verdict before it reaches the report, so a
+64-hex string can never leak into a transcript.
+
+`--json` emits a stable schema:
+
+```json
+{"checks": [{"id": "…", "status": "pass|fail|warn", "detail": "…"}, …], "ok": true}
+```
+
+Doctor exit codes: `0` all checks passed, `1` any check failed, `2` bad
+arguments. A `WARN` never fails the run, but the checks that block play are
+FAILs: a missing `wine` on POSIX is a FAIL (exit `1`), not a WARN, because the
+launcher cannot run without it. `--game-dir` may appear before or after the
+`doctor` subcommand. The doctor is read-only — it never writes into the
+install. `ok` in the JSON output is `true` when no check FAILs (WARNs do not
+flip it).
 
 ## `data` — read-only structural report
 
@@ -142,6 +186,11 @@ The report layout and every measured number are documented in
 | `2` | Bad command line, or a bad/missing install — the message lists what is missing and the exact search paths tried. |
 | `3` | Rewrite refused — the INI is not writable, or the `copy-tree` target already exists / could not be copied. |
 | `4` | Wine not found (launch only). |
+
+The `doctor` subcommand overrides this with its own contract: `0` all checks
+passed, `1` any check failed, `2` bad arguments (a missing `--game-dir` with no
+env/config fallback is `2`; an install that does not resolve is a `FAIL` check,
+`1`).
 
 ## Deliberate decisions and known limits
 
