@@ -33,7 +33,12 @@ curl -s https://api.github.com/repos/rootext/disciples-gl-builds | grep -A3 '"li
   third-party binaries, and the release artifact is pinned by digest so a
   re-tagged release upstream cannot silently change what users run. Licensing
   permission is not the same as a good reason to commit a binary.
-- **Pinned third_party archive digest** (allowed — not a game hash): cnc-ddraw `v7.1.0.0` `cnc-ddraw.zip` (2,688,079 bytes) SHA-256 `0b13ab89a64c9918189b1dadd449ef6ed3cb3b7b19cabd96d8adbd95505bb908`, measured 2026-11-21 and recorded in `third_party/cnc-ddraw-PROVENANCE.md`.
+- **Pinned third_party archive digest** (allowed — not a game hash): cnc-ddraw
+  `v7.1.0.0` `cnc-ddraw.zip` (2,688,079 bytes), SHA-256 measured 2026-11-21 and
+  recorded once in `third_party/cnc-ddraw-PROVENANCE.md`; the same constant is
+  the pin in `src/disciples_play/wrapper.py` (`CNC_DDRAW_SHA256`). Those two
+  places are the only third-party digests in the repository, and neither is a
+  hash of a game file.
 - **`cnc-ddraw` requires the game to be fullscreen** (`InWindow=0`); windowed
   presentation comes from cnc-ddraw, not from the game's own windowed mode. That
   ordering is documented wherever the preset is (milestone M3).
