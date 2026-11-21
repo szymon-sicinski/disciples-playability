@@ -41,10 +41,11 @@ disciples-play --no-launch --game-dir "<install>"   # rewrites the 21 keys only
 # then press Play in Heroic / Lutris with a Proton runner
 ```
 
-One fact to keep straight, because it changes what the pack is for: that same
-Proton prefix plays **with the original `X:\…` values too**. The rewrite is not
-what makes the game run — the Proton runner is. The rewrite is what makes the
-install *portable*: a folder you move still finds its data, in either runner.
+One fact to keep straight, because it changes what the pack is for: the run
+that played used the install's **original `X:\…` values**, so the rewrite is
+not what made the game run — the Proton runner did. What the rewrite buys is
+*portability*: a folder you move still finds its data. Whether the rewritten
+`Z:\…` values also play is still unmeasured (see the open item in §3).
 
 **cnc-ddraw was not in the picture in any of those runs.** Module dumps from
 every attempt (failing and working) list `C:\windows\system32\ddraw.dll` and

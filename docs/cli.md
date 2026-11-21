@@ -223,7 +223,7 @@ disciples-play --game-dir "…/Disciples Gold" --print-command
 # fix the INI and launch under plain wine (crashes at 0059559E for this title)
 disciples-play --game-dir "…/Disciples Gold"
 
-# fix the INI only, then press Play in a Proton runner — the working sequence
+# fix the INI only, then press Play in a Proton runner — the documented sequence
 disciples-play --game-dir "…/Disciples Gold" --no-launch
 
 # fix the INI, leave a pristine GOG folder, and launch from the copy
