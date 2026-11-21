@@ -54,9 +54,10 @@ it. Do not credit it with the working run.
 
 ---
 
-Three ways to get a prefix. All three end at the same place: a Wine prefix, a
-`ddraw` override that routes DirectDraw to the staged `cnc-ddraw` DLL, and the
-`disciples-play` launcher (which re-points the INI and launches).
+Three ways to get a prefix. Each one ends with the `disciples-play` launcher
+doing the INI rewrite, and — under plain Wine and Bottles — with a `ddraw`
+override that routes DirectDraw to the staged `cnc-ddraw` DLL. Only the Proton
+path (§3) has actually started this title so far.
 
 The one thing every recipe shares is the **override**. `Disciple.exe` does not
 import DirectDraw — `HA312W32.DLL` loads `ddraw.dll` by name — so a
@@ -157,7 +158,8 @@ Bottles wraps the same Wine prefix in a GUI. The parts that matter are the
 
    ```bash
    disciples-play --game-dir "/path/to/Disciples Gold"
-   # expected: same as §1d — the INI rewrite summary, then the game window.
+   # expected: the INI rewrite summary; then the game starts — expect the §1
+   #           start-up crash unless that bottle's runner is Proton.
    ```
 
    From a *host* shell the launcher would pick the host's plain `wine`, not the
