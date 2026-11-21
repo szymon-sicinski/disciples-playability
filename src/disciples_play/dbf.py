@@ -110,6 +110,12 @@ def parse_dbf_header(data: bytes) -> DbfHeader:
     records = struct.unpack_from("<I", data, 4)[0]
     header_len = struct.unpack_from("<H", data, 8)[0]
     record_len = struct.unpack_from("<H", data, 10)[0]
+    if record_len < 1:
+        # A zero record length divides by zero later (in the deleted-count and
+        # column readers) and cannot describe a record that starts with a
+        # deletion flag; reject it here so one malformed header surfaces as a
+        # clean per-file error rather than taking the whole report down.
+        raise ValueError(f"record_len {record_len} is invalid: must be at least 1 byte")
 
     field_count = (header_len - HEADER_FIXED - 1) // FIELD_DESCRIPTOR
     if (header_len - HEADER_FIXED - 1) % FIELD_DESCRIPTOR != 0:

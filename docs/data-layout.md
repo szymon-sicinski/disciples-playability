@@ -167,10 +167,34 @@ IDs are fixed-width strings, base form **10** characters:
    g         000            uu            0000        ->  g000uu0000
 ```
 
-Observed prefixes/types (all **V**, read from the columns named in §1 field
-tables): `g` = a game entity (`uu` unit, `rr` race, `bb` build, `aa`
-ability/attack, `sp` spell); `x` = a localisation key (`tg` text-global), which
-resolves against `Tglobal.TXT_ID`.
+Observed prefixes and type codes, counted over live rows across every
+10-character ID column (`report.id_types`, produced by the command above; the
+prefix and type are lower-cased in the histogram):
+
+| Prefix | Type | Live-row count | Where seen | Label |
+|---|---|---|---|---|
+| `g` | `uu` | 5,564 | `GUNITS.UNIT_ID`, `IUNIT.UNIT_ID`, `SUnit.TYPE`, … | unit **V** |
+| `g` | `ig` | 1,684 | `GITEM.ITEM_ID`, `SItem.ITEM_TYPE` | item **V** |
+| `g` | `mg` | 848 | `GLMARK.LMARK_ID`, `SLmark.TYPE` | landmark **H** |
+| `g` | `rr` | 629 | `GRACE.RACE_ID`, `GUNITS.RACE_ID` | race **V** |
+| `g` | `lo` | 627 | `GLORD.LORD_ID`, `GSPELLR.LORD_ID` | lord **V** |
+| `g` | `ss` | 604 | `GSPELLS.SPELL_ID`, `GSPELLR.SPELL_ID`, `ISPELL.SPELL_ID` | spell **V** |
+| `g` | `aa` | 568 | `GUNITS.ATTACK_ID`, `GATTACKS.ATT_ID` | attack **V** |
+| `g` | `um` | 438 | `GSPELLS.MODIF_ID`, `GMODIF.MODIF_ID`, `GRACE.PROTECTION` | modifier **V** |
+| `g` | `bb` | 432 | `GBUILD.BUILD_ID`, `GBUILIST.BUILD_ID`, `IBUILD.BUILD_ID` | build **V** |
+| `x` | `tg` | 3,847 | `Tglobal.TXT_ID`, `GUNITS.NAME_TXT`, `…_TXT` columns | text-global **V** |
+| `x` | `ta` | 731 | `TApp.TXT_ID` | app text **H** |
+| `x` | `cw` | 10 | `CCAMP.NAME_ID`, `CCAMP.DESC_ID` | campaign text **H** |
+
+The code and count are **V** (from `report.id_types`); the *label* is graded
+separately — **V** where the column name fixes it (unit/race/build/attack/spell
+/lord/item/modifier/text-global), **H** where it is inferred from the table or
+column name (`mg` from `LMARK_ID`, `ta` from `TApp`, `cw` from `CCAMP`).
+Spell is **`ss`** (`g000ss…`), not `sp` — there is no `sp` anywhere — and `lo`,
+`um`, `mg`, `ig`, `ta` and `cw` are additional types the earlier draft omitted.
+Both prefixes appear upper- or lower-cased in the raw data (`G000IG…`,
+`X000TG…`); the histogram lower-cases them, matching the case-insensitive
+resolution below.
 
 There is **no leading count digit or marker** on a reference. A field that
 references one or more IDs holds the plain 10-character ID; multi-ID values are

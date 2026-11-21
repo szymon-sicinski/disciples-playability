@@ -74,6 +74,23 @@ def _dbf_reports(game_dir: Path) -> list[dict]:
     return reports
 
 
+def _safe(fn, path: Path) -> dict:
+    """Call ``fn(path)`` and turn an unreadable file into a per-file error dict.
+
+    ``fn`` is a per-file reader returning a ``dict``.  On ``ValueError`` or
+    ``OSError`` (an unreadable file, a truncated buffer, a decode failure) the
+    result is ``{"path": <name>, "error": <message>}``, so one bad file in a
+    314-file install never takes the whole report down.  This is the same
+    contract ``summarize_dbf`` already honours; every other reader is wrapped
+    through here so the promise holds for all of them, not just ``.DBF``.
+    """
+
+    try:
+        return fn(path)
+    except (ValueError, OSError) as exc:
+        return {"path": Path(path).name, "error": str(exc)}
+
+
 def _mqdb_reports(game_dir: Path) -> list[dict]:
     reports: list[dict] = []
     seen: set[Path] = set()
@@ -84,7 +101,7 @@ def _mqdb_reports(game_dir: Path) -> list[dict]:
         for p in sorted(sub.iterdir()):
             if p.suffix.lower() in MQDB_EXTENSIONS and p.is_file() and p not in seen:
                 seen.add(p)
-                reports.append(scan_mqdb(p))
+                reports.append(_safe(scan_mqdb, p))
     return reports
 
 
@@ -314,6 +331,47 @@ def _cross_reference_report(game_dir: Path) -> dict:
     }
 
 
+def _id_type_report(game_dir: Path) -> dict:
+    """Histogram of the 2-letter ID type codes across the 10-char ID columns.
+
+    Reads only the identifier strings (the same ``ID``-style columns the
+    cross-reference report already reads, no text bodies), lower-cases the
+    prefix and the two-letter type code, and counts ``(prefix, type)`` pairs
+    over live rows.  The result feeds the ID-type table in
+    ``docs/data-layout.md``.
+    """
+
+    counts: Counter[tuple[str, str]] = Counter()
+    for d in DBF_DIRS:
+        sub = game_dir / d
+        if not sub.is_dir():
+            continue
+        for p in sorted(sub.iterdir()):
+            if not (p.is_file() and p.suffix.lower() == ".dbf"):
+                continue
+            try:
+                header, records = read_dbf(p)
+            except (ValueError, OSError):
+                continue
+            for f in header.fields:
+                if f.type != "C" or f.length != 10:
+                    continue
+                for value in column_values(header, records, f.name, skip_deleted=True):
+                    value = value.strip()
+                    if len(value) != 10:
+                        continue
+                    prefix = value[0].lower()
+                    type_code = value[4:6].lower()
+                    if prefix in ("g", "x") and value[1:4].isdigit() and type_code.isalpha():
+                        counts[(prefix, type_code)] += 1
+    return {
+        "types": [
+            {"prefix": prefix, "type": type_code, "count": n}
+            for (prefix, type_code), n in sorted(counts.items(), key=lambda kv: -kv[1])
+        ]
+    }
+
+
 def build_report(game_dir: str | os.PathLike[str]) -> dict:
     """Build the full structural report for a game directory.
 
@@ -340,17 +398,17 @@ def build_report(game_dir: str | os.PathLike[str]) -> dict:
     for p in _walk_files(root):
         ext = p.suffix.lower()
         if ext == ".dlg":
-            dlg_reports.append(_dlg_report(p))
+            dlg_reports.append(_safe(_dlg_report, p))
         elif p.name.upper() == "PALANIM.DAT":
-            palanim_reports.append(_palanim_report(p))
+            palanim_reports.append(_safe(_palanim_report, p))
         elif ext in FONT_EXTENSIONS:
-            mft_reports.append(_mft_report(p))
+            mft_reports.append(_safe(_mft_report, p))
         elif ext in SMK_EXTENSIONS:
-            smk_reports.append(_smk_report(p))
+            smk_reports.append(_safe(_smk_report, p))
         elif ext in WAV_EXTENSIONS:
-            wav_reports.append(_wav_report(p))
+            wav_reports.append(_safe(_wav_report, p))
         elif p.name.upper() == "CAPITAL.DAT":
-            capital_reports.append(_capital_report(p))
+            capital_reports.append(_safe(_capital_report, p))
 
     return {
         "game_dir": str(root),
@@ -358,6 +416,7 @@ def build_report(game_dir: str | os.PathLike[str]) -> dict:
         "dbf": _dbf_reports(root),
         "mqdb": _mqdb_reports(root),
         "cross_references": _cross_reference_report(root),
+        "id_types": _id_type_report(root),
         "dlg": dlg_reports,
         "palanim": palanim_reports,
         "capital_dat": capital_reports,
@@ -365,6 +424,23 @@ def build_report(game_dir: str | os.PathLike[str]) -> dict:
         "smk": smk_reports,
         "wav": wav_reports,
     }
+
+
+def report_error_count(report: dict) -> int:
+    """Count per-file error entries across every section of a report.
+
+    Each per-file reader emits ``{"path": ..., "error": ...}`` on failure; this
+    is the single source of truth for whether the ``data`` command should exit
+    ``1`` (``EXIT_DATA_INCOMPLETE``), regardless of which reader failed.
+    """
+
+    sections = ("dbf", "mqdb", "dlg", "palanim", "capital_dat", "mft", "smk", "wav")
+    return sum(
+        1
+        for section in sections
+        for item in report.get(section, [])
+        if isinstance(item, dict) and "error" in item
+    )
 
 
 def render_text(report: dict) -> str:
@@ -397,6 +473,9 @@ def render_text(report: dict) -> str:
     lines.append("")
     lines.append(f"MQDB containers ({len(report['mqdb'])}):")
     for m in report["mqdb"]:
+        if "error" in m:
+            lines.append(f"  {m['path']}: {m['error']}")
+            continue
         w = m["winner"]
         lines.append(
             f"  {m['path']}: {m['size']} B, magic={m['magic']!r}, "
@@ -426,8 +505,16 @@ def render_text(report: dict) -> str:
             )
 
     lines.append("")
+    lines.append("ID type codes (prefix/type counts over live rows):")
+    for row in report["id_types"]["types"]:
+        lines.append(f"  {row['prefix']}/{row['type']}: {row['count']}")
+
+    lines.append("")
     lines.append(f"dialog scripts ({len(report['dlg'])}):")
     for d in report["dlg"]:
+        if "error" in d:
+            lines.append(f"  {d['path']}: {d['error']}")
+            continue
         lines.append(
             f"  {d['path']}: {d['dialog_blocks']} DIALOG blocks, "
             f"{d['lines']} lines, elements={d['element_types']}"

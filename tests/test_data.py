@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 
 import pytest
 
 from disciples_play.__main__ import main
-from disciples_play.data import build_report
+from disciples_play.data import build_report, report_error_count
 
 from .fixtures import build_dbf, build_mqdb, write
 
@@ -56,6 +58,23 @@ def _synthetic_tree(tmp_path) -> str:
         tmp_path / "Music" / "TEST.WAV",
         b"RIFF" + b"\x00" * 4 + b"WAVE" + b"fmt " + b"\x00" * 4 + b"\x00" * 16,
     )
+    return str(tmp_path)
+
+
+def _synthetic_install(tmp_path) -> str:
+    """The same tree, plus a stub ``Exe/Disciple.exe`` + ``DISCIPLE.INI``.
+
+    The ``data`` subcommand resolves the install through
+    ``launch.resolve_install`` (like the launcher), which keys on
+    ``Exe/Disciple.exe``; the CLI-level tests need that stub, while the
+    ``build_report``-level tests exercise the data folders directly.
+    """
+
+    _synthetic_tree(tmp_path)
+    exe_dir = tmp_path / "Exe"
+    exe_dir.mkdir(exist_ok=True)
+    (exe_dir / "Disciple.exe").write_bytes(b"MZ")
+    (exe_dir / "DISCIPLE.INI").write_bytes(b"")
     return str(tmp_path)
 
 
@@ -129,7 +148,7 @@ def test_report_is_json_serialisable(tmp_path) -> None:
 
 
 def test_data_subcommand_emits_json(tmp_path) -> None:
-    game_dir = _synthetic_tree(tmp_path)
+    game_dir = _synthetic_install(tmp_path)
     rc = main(["data", "--game-dir", game_dir, "--json"])
     assert rc == 0
 
@@ -180,6 +199,7 @@ def test_build_report_survives_non_dbase_file(tmp_path) -> None:
 
 
 def test_data_subcommand_returns_nonzero_on_bad_dbf(tmp_path) -> None:
+    _synthetic_install(tmp_path)
     write(tmp_path / "Globals" / "GOOD.DBF", build_dbf([("ID", "C", 4)], records=[b"aaaa"]))
     write(tmp_path / "Globals" / "BOGUS.DBF", b"not a dbase file")
     rc = main(["data", "--game-dir", str(tmp_path), "--json"])
@@ -210,3 +230,93 @@ def test_cross_reference_reports_missing_field(tmp_path) -> None:
     assert name_link["field_missing"] is True
     assert name_link["nonempty"] is None
     assert name_link["resolved"] is None
+
+
+def test_id_type_report_counts_prefix_type_pairs(tmp_path) -> None:
+    # GUNITS.UNIT_ID=g000uu0000, NAME_TXT=x000tg1000, RACE_ID=g000rr0000;
+    # GRACE.RACE_ID=g000rr0000; Tglobal.TXT_ID=x000tg1000.  GTEST.DBF's ID is
+    # 4 chars, so it does not contribute.
+    report = build_report(_synthetic_tree(tmp_path))
+    types = {(t["prefix"], t["type"]): t["count"] for t in report["id_types"]["types"]}
+    assert types == {("g", "uu"): 1, ("x", "tg"): 2, ("g", "rr"): 2}
+
+
+def test_data_env_var_install_source(tmp_path, monkeypatch) -> None:
+    game_dir = _synthetic_install(tmp_path)
+    monkeypatch.setenv("DISCIPLES_GAME_DIR", game_dir)
+    assert main(["data", "--json"]) == 0
+
+
+def test_data_config_file_install_source(tmp_path, monkeypatch) -> None:
+    game_dir = _synthetic_install(tmp_path)
+    config_dir = tmp_path / "config"
+    monkeypatch.delenv("DISCIPLES_GAME_DIR", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_dir))
+    monkeypatch.setenv("APPDATA", str(config_dir))
+    (config_dir / "disciples-play").mkdir(parents=True)
+    (config_dir / "disciples-play" / "config.ini").write_text(f"game_dir = {game_dir}\n")
+    assert main(["data", "--json"]) == 0
+
+
+def test_data_resolves_parent_dir(tmp_path) -> None:
+    # The launcher resolves a copied-retail folder one level down; data must
+    # resolve the same way instead of refusing the parent directory.
+    inner = tmp_path / "Games" / "Disciples Gold"
+    _synthetic_install(inner)
+    assert main(["data", "--game-dir", str(tmp_path / "Games"), "--json"]) == 0
+
+
+def test_data_no_install_specified_returns_two(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("DISCIPLES_GAME_DIR", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "no-config"))
+    monkeypatch.setenv("APPDATA", str(tmp_path / "no-config"))
+    assert main(["data", "--json"]) == 2
+
+
+def test_help_mentions_data_subcommand(capsys) -> None:
+    assert main(["--help"]) == 0
+    assert "data" in capsys.readouterr().out
+
+
+def test_build_report_survives_unreadable_dlg(tmp_path, monkeypatch) -> None:
+    # A per-file reader that raises must not take the whole report down; the
+    # _safe() wrapper turns it into a per-file error dict.
+    import disciples_play.data as data_mod
+
+    def boom(path):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(data_mod, "_dlg_report", boom)
+    report = build_report(_synthetic_tree(tmp_path))
+    assert any("error" in d and "Permission denied" in d["error"] for d in report["dlg"])
+    assert report_error_count(report) == 1
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="chmod 000 does not block reads on Windows")
+def test_build_report_survives_unreadable_mqdb(tmp_path) -> None:
+    if os.geteuid() == 0:
+        pytest.skip("running as root; chmod 000 does not block reads")
+    game_dir = _synthetic_tree(tmp_path)
+    dbi = tmp_path / "Imgs1" / "TEST.DBI"
+    dbi.chmod(0)
+    try:
+        report = build_report(game_dir)
+    finally:
+        dbi.chmod(0o644)
+    assert any("error" in m for m in report["mqdb"])
+    assert report_error_count(report) == 1
+
+
+def test_data_returns_nonzero_on_unreadable_non_dbf(tmp_path, monkeypatch) -> None:
+    # An unreadable non-DBF file must yield exit 1 (data incomplete), not a
+    # traceback -- the hardening covers every reader, not just .DBF.
+    import disciples_play.data as data_mod
+
+    def boom(path):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(data_mod, "_smk_report", boom)
+    game_dir = _synthetic_install(tmp_path)
+    (tmp_path / "Video").mkdir()
+    (tmp_path / "Video" / "X.SMK").write_bytes(b"SMK2" + b"\x00" * 12)
+    assert main(["data", "--game-dir", game_dir, "--json"]) == 1

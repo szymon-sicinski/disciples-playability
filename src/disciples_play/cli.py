@@ -5,6 +5,8 @@ contract, documented here and in ``docs/cli.md``:
 
 * ``0`` -- success (also ``--help``/``--version``, ``--dry-run``,
   ``--print-command``, ``--no-launch``)
+* ``1`` -- ``data``: at least one file could not be parsed (the report still
+  prints, with per-file ``error`` entries)
 * ``2`` -- bad command line, or a bad/missing install
 * ``3`` -- rewrite refused (INI not writable, copy-tree target exists)
 * ``4`` -- wine not found (launch only)
@@ -43,8 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
             "under Wine. Requires the game files you already own."
         ),
         epilog=(
-            "exit codes: 0 success; 2 bad/missing install; 3 rewrite refused; "
-            "4 wine not found. See docs/cli.md."
+            "exit codes: 0 success; 1 data parse errors; 2 bad/missing install; "
+            "3 rewrite refused; 4 wine not found. See docs/cli.md."
         ),
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -107,6 +109,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--quiet",
         action="store_true",
         help="suppress the rewrite summary line",
+    )
+
+    subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
+    data_parser = subparsers.add_parser(
+        "data",
+        help="print a read-only structural report of the game's data files",
+        description="Read-only structural report of the game's data files.",
+    )
+    data_parser.add_argument(
+        "--game-dir",
+        metavar="DIR",
+        help=(
+            "the install directory, or a parent of it (defaults to "
+            "$DISCIPLES_GAME_DIR, then the config file)"
+        ),
+    )
+    data_parser.add_argument(
+        "--json", action="store_true", help="emit the report as JSON instead of text"
     )
     return parser
 
@@ -205,36 +225,38 @@ def _configure_logging(verbose: bool, quiet: bool) -> None:
     logging.getLogger().setLevel(level)
 
 
-def _data_main(argv: list[str]) -> int:
-    """``disciples-play data`` -- the read-only structural report (M5)."""
-    parser = argparse.ArgumentParser(
-        prog="disciples-play data",
-        description="Read-only structural report of the game's data files.",
-    )
-    parser.add_argument("--game-dir", required=True, help="path to the game install")
-    parser.add_argument(
-        "--json", action="store_true", help="emit the report as JSON instead of text"
-    )
-    args = parser.parse_args(argv)
+def _data_main(ns: argparse.Namespace) -> int:
+    """``disciples-play data`` -- the read-only structural report (M5).
 
-    from .data import build_report, render_text
+    Resolves the install the same way the launcher does (``--game-dir``, then
+    ``$DISCIPLES_GAME_DIR``, then the config file, then the parent-directory
+    search in :func:`launch.resolve_install`), so the two subcommands agree on
+    what ``--game-dir`` means and a parent directory resolves to the same root.
+    """
+
+    from .data import build_report, render_text, report_error_count
 
     try:
-        report = build_report(args.game_dir)
+        game_dir = resolve_game_dir(ns)
+        install = launch.resolve_install(Path(game_dir))
+        report = build_report(install.root)
+    except launch.CliError as exc:
+        print(f"disciples-play data: {exc.message}", file=sys.stderr)
+        return exc.exit_code
     except NotADirectoryError as exc:
         print(f"disciples-play data: {exc}", file=sys.stderr)
         return EXIT_USAGE_OR_INSTALL
 
-    if args.json:
+    if ns.json:
         _emit(json.dumps(report, indent=2))
     else:
         _emit(render_text(report))
 
-    dbf_errors = [d for d in report["dbf"] if "error" in d]
-    if dbf_errors:
+    errors = report_error_count(report)
+    if errors:
         print(
-            f"disciples-play data: {len(dbf_errors)} file(s) could not be parsed "
-            "(see the report's dbf[] 'error' entries)",
+            f"disciples-play data: {errors} file(s) could not be parsed "
+            "(see the report's 'error' entries)",
             file=sys.stderr,
         )
         return EXIT_DATA_INCOMPLETE
@@ -256,8 +278,6 @@ def _emit(text: str) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if argv and argv[0] == "data":
-        return _data_main(argv[1:])
     parser = build_parser()
     if not argv:
         parser.print_help()
@@ -266,6 +286,9 @@ def main(argv: list[str] | None = None) -> int:
         ns = parser.parse_args(argv)
     except SystemExit as exc:  # --help/--version exit 0; bad arguments exit 2
         return int(exc.code or EXIT_OK)
+
+    if getattr(ns, "command", None) == "data":
+        return _data_main(ns)
 
     _configure_logging(ns.verbose, ns.quiet)
     try:

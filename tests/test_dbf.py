@@ -149,3 +149,28 @@ def test_parse_rejects_bad_terminator() -> None:
     data[32 + 32] = 0x00
     with pytest.raises(ValueError):
         parse_dbf_header(bytes(data))
+
+
+def test_parse_rejects_zero_record_len() -> None:
+    # A header whose record-length field is 0 is malformed-but-parseable: the
+    # field descriptors and 0x0D terminator are all legal, so this must be
+    # rejected by the record_len guard -- never allowed to reach the deleted /
+    # column readers, where `len // record_len` would divide by zero.
+    fields = [("ID", "C", 4)]
+    data = bytearray(build_dbf(fields, records=[b"aaaa"] * 5))
+    struct.pack_into("<H", data, 10, 0)  # record_len = 0
+    with pytest.raises(ValueError):
+        parse_dbf_header(bytes(data))
+
+
+def test_summarize_dbf_reports_zero_record_len(tmp_path) -> None:
+    # The same malformed header must surface as a per-file error dict, not an
+    # uncaught ZeroDivisionError that kills the whole report.
+    fields = [("ID", "C", 4)]
+    data = bytearray(build_dbf(fields, records=[b"aaaa"] * 5))
+    struct.pack_into("<H", data, 10, 0)
+    path = write(tmp_path / "zero.dbf", bytes(data))
+
+    summary = summarize_dbf(path)
+    assert "error" in summary
+    assert summary["path"] == "zero.dbf"
