@@ -122,13 +122,13 @@ the one-line install command is not wired yet — copy `ddraw.dll` and
 `ddraw.ini` from the pinned `v7.1.0.0` release into `Exe/` (it is **not**
 committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
-> **Status: plain-Wine start-up crashes at `0059559E` and is unresolved.** Two
-> real runs on 2026-11-21 died with `Exception C0000005` (write to `0x00000000`)
-> after the game logged its own start — with `InWindow=1` **and** with
-> `InWindow=0`, so display mode is not the cause. Tested and failed:
-> `InWindow=0`, `InWindow=1`. Ruled out since: a staged cnc-ddraw (same fault)
-> and `DDraw=0` (starts, black screen). Still open: a non-wow64 Wine and a
-> different Windows version in the prefix. The sequence that does work — rewrite
+> **Status: plain-Wine start-up crashes at `0059559E` and is unresolved.** The
+> runs on 2026-11-21 died with `Exception C0000005` (write to `0x00000000`)
+> after the game logged its own start, with `InWindow=1` and `InWindow=0` alike,
+> and a third with the wrapper staged faulted the same way — so display mode is
+> not the cause, and the wrapper does not change it. `DDraw=0` starts to a black
+> screen instead. Still open: a non-wow64 Wine and a different Windows version in
+> the prefix. The sequence that does work — rewrite
 > the INI, then start the game from a Proton runner — is
 > [`docs/wine-recipe.md`](docs/wine-recipe.md) "Start here"; the fault itself is
 > analysed in its
