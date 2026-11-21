@@ -158,6 +158,16 @@ def test_data_subcommand_missing_dir_returns_two(tmp_path) -> None:
     assert rc == 2
 
 
+def test_data_subcommand_accepts_toplevel_game_dir(tmp_path) -> None:
+    # ``disciples-play --game-dir X data`` must resolve the install the same as
+    # ``disciples-play data --game-dir X``.  The subparser's own ``--game-dir``
+    # (same dest, default None) used to shadow the top-level one, silently
+    # dropping a value the caller put *before* ``data``.
+    game_dir = _synthetic_install(tmp_path)
+    rc = main(["--game-dir", game_dir, "data", "--json"])
+    assert rc == 0
+
+
 def test_build_report_rejects_non_directory(tmp_path) -> None:
     not_a_dir = tmp_path / "nope"
     not_a_dir.write_text("hi")

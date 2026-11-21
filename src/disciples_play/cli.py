@@ -120,6 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
     data_parser.add_argument(
         "--game-dir",
         metavar="DIR",
+        default=argparse.SUPPRESS,
         help=(
             "the install directory, or a parent of it (defaults to "
             "$DISCIPLES_GAME_DIR, then the config file)"
