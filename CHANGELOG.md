@@ -102,10 +102,10 @@ those eleven items are ticked.
   (GDI fallback) starts and plays sound but leaves the screen black. It is a
   limitation of plain Wine as the launch environment, not an INI problem; this
   pack neither fixes it nor claims to.
-- **Proton plays.** Heroic + Proton-GE, its own prefix, reaches the main menu
-  and plays with the install's **original `X:\…` INI**. The Proton runner is what
-  makes it run. The pack's rewritten `Z:\…` values are validated as a
-  transformation only — not yet observed in game.
+- **Proton plays, with either INI.** Heroic + Proton-GE, its own prefix, reaches
+  the main menu and plays with the install's **original `X:\…` INI** *and* with
+  **the pack's rewritten `Z:\…` values** (`--no-launch`, then Play in Heroic).
+  The Proton runner is what makes it run; the rewrite is what makes it portable.
 - **The pack's launcher does not drive Proton.** It execs a single `wine`
   binary (`--wine` overrides it) and has no `STEAM_COMPAT_*` path, so the
   supported sequence is `disciples-play --no-launch --game-dir …` and then

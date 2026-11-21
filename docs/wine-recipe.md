@@ -23,7 +23,7 @@ environment is the problem, not your INI.** Measured by the maintainer on
 | plain `wine`, no wrapper, `InWindow=0` / `InWindow=1` | same crash at `0059559E` |
 | plain `wine`, `DDraw=0` (GDI fallback) | starts, sound, **black screen** |
 | Heroic + Proton-GE, its own prefix, the original `X:\…` INI | **plays** ✅ |
-| Heroic + Proton-GE, its own prefix, the pack's rewritten INI (21 keys → `Z:\…`) | **not yet observed in game** — see the note below |
+| Heroic + Proton-GE, its own prefix, **the pack's rewritten INI (21 keys → `Z:\…`)** | **plays** ✅ (re-run 2026-11-21 after the rewrite was put in place and the correct `Disciple.exe` confirmed) |
 
 The crash is `mov ecx,[eax] ; call [ecx+0x58]` with `EAX=0` — a null object
 handed back by the graphics layer, i.e. Wine's own `ddraw` never returns a
@@ -181,15 +181,17 @@ Bottles wraps the same Wine prefix in a GUI. The parts that matter are the
 ## 3. Heroic / Proton
 
 > **This is the verified path** (maintainer, 2026-11-21): Heroic with a
-> Proton-GE runner reached the main menu and played — with the install's
-> **original `X:\…` INI**. No wrapper was staged in that run, so nothing here
+> Proton-GE runner reaches the main menu and plays — both with the install's
+> **original `X:\…` INI** and with **the pack's rewritten `Z:\…` values**
+> (`disciples-play --no-launch`, then Play in Heroic; the rewritten file was left
+> untouched by the run). No wrapper was staged in either run, so nothing here
 > credits cnc-ddraw with it.
 >
-> **Open item:** the run that played was *not* using the pack's rewritten
-> `Z:\…` values. The file kept as "the rewritten INI" turned out to hold the
-> original `X:\…` paths, so the rewrite has only been validated as a
-> transformation (byte-level, on a copy) — not yet in game. Re-run this section
-> with the pack's output in place before claiming it plays with `Z:\…`.
+> One correction worth keeping visible: an earlier run was recorded as using the
+> rewritten INI when the file in place still held the original `X:\…` values.
+> The rewrite was re-tested deliberately afterwards, with the correct executable
+> confirmed, and plays — so the portability claim now rests on a real run rather
+> than on a file-copy assumption.
 
 The existing prefix named in `Exe\Disciple.log` (`X:\Games\Heroic\…`) came from
 a Heroic install, so this is the path that reproduces what the maintainer

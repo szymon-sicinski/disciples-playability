@@ -46,9 +46,10 @@ copy-tree`.
 `Disciple.exe` dies with an access violation at `0059559E`, with or without the
 cnc-ddraw wrapper staged — while **Heroic + Proton-GE** reaches the main menu
 and plays with the install's **original `X:\…` INI**. So the Proton runner is
-what makes it run; nothing here fixes that crash. (The pack's `Z:\…` rewrite is
-validated as a transformation but has **not** yet been observed in game — see
-[`docs/wine-recipe.md`](docs/wine-recipe.md).) Because the launcher
+what makes it run; nothing here fixes that crash. **The pack's own `Z:\…`
+rewrite also plays** under the same Proton runner (`--no-launch`, then Play in
+Heroic) — so the rewrite is what makes the install portable and the Proton
+runner is what makes it run. See [`docs/wine-recipe.md`](docs/wine-recipe.md). Because the launcher
 execs a single `wine` binary and cannot start into a Proton prefix, the
 supported sequence is `disciples-play --no-launch --game-dir …` and then
 **Play** in Heroic or Lutris — [`docs/wine-recipe.md`](docs/wine-recipe.md)
