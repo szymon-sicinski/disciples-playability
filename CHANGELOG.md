@@ -77,7 +77,7 @@ release only after those eleven items are ticked.
 
 ### Verified
 
-- 224 synthetic-fixture tests pass; 2 read-only tests pass against a retail
+- 226 synthetic-fixture tests pass; 2 read-only tests pass against a retail
   installation; `ruff check` and `ruff format --check` are clean.
 - `disciples-play data` runs read-only over a retail install: 314 files, 131
   dBase III tables (header arithmetic closes on all), 19 `MQDB` containers.

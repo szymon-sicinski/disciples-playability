@@ -115,8 +115,8 @@ def make_install(
 
     ``inwindow`` is the ``[Disciple] InWindow`` value written into the INI
     (``"0"`` by default -- the fullscreen baseline); ``None`` leaves the key
-    out, and ``"1"`` asks the game for its own window, which needs a staged
-    cnc-ddraw to be supported.
+    out, and ``"1"`` always WARNs -- a verified wrapper only changes the wording,
+    not the verdict.
     """
     exe_dir = base / "Exe"
     exe_dir.mkdir(parents=True)

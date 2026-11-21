@@ -3,7 +3,7 @@
 **Status: every item below is UNVERIFIED.** No agent in this project has a
 display or a Wine runtime, so nothing here has been observed in-game. The test
 suite proves the INI rewrite, the CLI contract, the doctor's checks and the
-data scanner against synthetic fixtures (224 tests) plus a read-only pass over
+data scanner against synthetic fixtures (226 tests) plus a read-only pass over
 the retail install (2 tests); it cannot prove the game *plays*.
 
 This file is the release's honest boundary. Tick a box **only** after running
@@ -91,7 +91,7 @@ Run at the M6 head on Linux, Python 3.14 (the maintainer's Python 3.10–3.13 is
 covered by CI):
 
 ```bash
-python -m pytest -q                    # 224 passed, 2 skipped (realgame)
+python -m pytest -q                    # 226 passed, 2 skipped (realgame)
 DISCIPLES_GAME_DIR="/game-files/Disciples Gold" python -m pytest -q tests/test_realgame.py
                                        # 2 passed, read-only against the retail copy
 ruff check . && ruff format --check .  # clean
