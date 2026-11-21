@@ -28,8 +28,9 @@ curl -s https://api.github.com/repos/rootext/disciples-gl-builds | grep -A3 '"li
 
 ## Notes
 
-- **cnc-ddraw is MIT, so it could legally be bundled.** It is still fetched
-  rather than vendored, for two reasons: the repository stays small and free of
+- **cnc-ddraw is MIT, so it could legally be bundled.** It is still never
+  vendored — the fetch exists as a module rather than an automatic step — for two
+  reasons: the repository stays small and free of
   third-party binaries, and the release artifact is pinned by digest so a
   re-tagged release upstream cannot silently change what users run. Licensing
   permission is not the same as a good reason to commit a binary.

@@ -109,7 +109,8 @@ fallback renderer — install it via `install_wrapper(..., preset=build_preset(r
 
 ## Licence
 
-cnc-ddraw is MIT. The binary is **fetched, never vendored**: it is downloaded
-from the pinned tag and checked against the measured SHA-256 recorded in
-`third_party/cnc-ddraw-PROVENANCE.md`. The upstream `LICENSE` text ships
+cnc-ddraw is MIT. The binary is **never vendored**: `disciples_play.wrapper`
+exposes a fetch that downloads it from the pinned tag and checks the measured
+SHA-256 recorded in `third_party/cnc-ddraw-PROVENANCE.md` (no CLI command calls
+that fetch in v0.1 — the DLL is copied in by hand). The upstream `LICENSE` text ships
 verbatim as `third_party/cnc-ddraw-LICENSE.txt`.

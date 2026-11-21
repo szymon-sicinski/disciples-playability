@@ -91,7 +91,9 @@ console-script entry point is exercised and not merely imported.
   must print nothing.
 - **Do not modify the game folder.** The pack reads it; the launcher rewrites
   `Exe/DISCIPLE.INI` in place (default `--ini-mode backup`, with a one-time
-  `DISCIPLE.INI.orig`) or, with `--ini-mode copy-tree`, in a sibling copy.
+  backup named after whichever INI file it resolved — `DISCIPLE.INI.orig` or
+  `DISCIPLE.ini.orig` on the lowercase install the game writes back) or, with
+  `--ini-mode copy-tree`, in a sibling copy.
   Tests write only to synthetic fixtures, never the real installation.
 - **Commit the plan verbatim.** `docs/plans/00-playability-plan.md` is a
   byte-for-byte copy of the plan the milestones are measured against. Do not

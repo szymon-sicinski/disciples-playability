@@ -66,9 +66,10 @@ copy-tree`.
   III geometry with closing header arithmetic, `MQDB` chunk offsets/sizes with
   competing hypotheses scored, ID cross-reference counts, plain-text digests.
   No pixels, no palettes, no hashes.
-- **cnc-ddraw preset** — `windowed=1`, `maintas=1`, `maxfps=60`, `vsync=1`,
-  `adjmouse=1`, `hook=4` (mode 4 patches the module that actually loads
-  DirectDraw), with a pinned `v7.1.0.0` fetch and MIT licence text.
+- **cnc-ddraw preset** — nine `[ddraw]` keys, including `windowed=1`, `maintas=1`,
+  `maxfps=60`, `vsync=1`, `adjmouse=1` and `hook=4` (mode 4 patches the module
+  that actually loads DirectDraw); with a pinned `v7.1.0.0` fetch and MIT licence
+  text.
 - **Recipes and probe** — [`docs/wine-recipe.md`](docs/wine-recipe.md) covers
   plain `wine`, Bottles and Heroic/Proton; `scripts/probe-matrix.sh` runs the
   `DDraw × PaletteAnim` matrix and writes a paste-back report.
