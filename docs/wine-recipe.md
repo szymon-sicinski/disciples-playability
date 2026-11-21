@@ -83,10 +83,11 @@ disciples-play doctor --game-dir "/path/to/Disciples Gold"
 
 As of **2026-11-21** this title does not reach the main menu from this pack's
 launcher on plain Wine (wine-11.21 Staging, wow64), in **either** display mode.
-It is not a configuration fault that a recipe below can undo, and v0.1 has no
-workaround for it.
+It is not a configuration fault that a recipe below can undo: the way round it is
+a different launch environment — the supported sequence at the top of this file,
+not a Wine setting. No Wine-side fix is known.
 
-What the two real runs showed:
+What the runs on plain `wine` showed:
 
 ```
 Disciple.log   "Midgard (v.2000, 6, 22, 1) started on Sat Nov 21 19:13:04 2026"
@@ -100,7 +101,8 @@ imports        Disciple.exe imports no ddraw/dsound/dinput; SHW32.dll is the
                graphics layer
 launcher       all 21 installation keys rewritten, DISCIPLE.ini.orig written --
                the rewrite itself is fine
-wrapper        no ddraw.dll staged in the copy that crashed
+wrapper        no ddraw.dll staged in the first copy that crashed; the second
+               run had the wrapper staged and faulted the same way
 ```
 
 Tested and **ruled out**:

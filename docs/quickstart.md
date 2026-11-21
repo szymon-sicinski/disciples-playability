@@ -69,13 +69,8 @@ preset and the digest pin.
 
 ## If something does not work
 
-<<<<<<< HEAD
-- The window is black or never appears → [`wine-recipe.md`](wine-recipe.md) "If the screen is black".
-- The game dies at start-up with `C0000005` at `0059559E` → known and **unresolved**; [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine) lists what was tested and what was not.
-=======
 - The game **crashes at start-up** (`0059559E`, access violation) under plain `wine` → it is the launch environment, not your INI: rewrite with `disciples-play --no-launch --game-dir …` and press Play in Heroic/Lutris with a Proton runner ([`wine-recipe.md`](wine-recipe.md) "Start here").
 - The window is black or the game does not start → [`wine-recipe.md`](wine-recipe.md) "If the screen is black".
->>>>>>> _main
 - A `FAIL` from `doctor` names its own fix on the same line.
 - `disciples-play data --game-dir …` prints a read-only structural report of the
   data files (documented in [`data-layout.md`](data-layout.md)).

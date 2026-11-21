@@ -47,7 +47,9 @@ with `Exception C0000005` (write to `0x00000000`, EIP `0059559E`) after its own
 start-up log line — with `InWindow=0` **and** `InWindow=1`. Display mode is ruled
 out; the evidence and the open candidates are in
 [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine).
-Item 1 cannot be ticked until that is resolved.
+Item 1 cannot be ticked until the pack's own command is what reaches the menu
+(see item 1's note); a Proton-aware launch path would satisfy that without
+resolving `0059559E`.
 
 ---
 

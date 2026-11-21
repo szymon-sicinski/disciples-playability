@@ -128,8 +128,10 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 > `InWindow=0`, so display mode is not the cause. Tested and failed:
 > `InWindow=0`, `InWindow=1`. Ruled out since: a staged cnc-ddraw (same fault)
 > and `DDraw=0` (starts, black screen). Still open: a non-wow64 Wine and a
-> different Windows version in the prefix. No recipe
-> in [`docs/wine-recipe.md`](docs/wine-recipe.md) is a fix yet; the analysis is its
+> different Windows version in the prefix. The sequence that does work — rewrite
+> the INI, then start the game from a Proton runner — is
+> [`docs/wine-recipe.md`](docs/wine-recipe.md) "Start here"; the fault itself is
+> analysed in its
 > ["Known crash at start-up"](docs/wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine)
 > section.
 >

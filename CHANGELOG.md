@@ -7,22 +7,12 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Unreleased until human verification — v0.1.0
 
 The code, the docs and the test suite are complete for v0.1.0. The tag is
-<<<<<<< HEAD
-**deliberately not pushed**: the first real in-game runs (2026-11-21) reached the
-game's start-up and died there — `Exception C0000005` at `0059559E`, identically
-with `[Disciple] InWindow=1` and `InWindow=0`, so the cause is **unresolved** and
-is not display mode. Every claim that the pack makes the game playable is
-therefore still a human check listed in
-[`docs/verification.md`](docs/verification.md) and marked **UNVERIFIED**. Tag and
-release only after those eleven items are ticked.
-=======
 **deliberately not pushed**: no agent here has run the game, and every claim
 that the pack makes the game playable is a human check listed in
 [`docs/verification.md`](docs/verification.md) and marked **UNVERIFIED**. The
 maintainer's first in-game run (2026-11-21) produced one partial result and one
 hard limitation — see *Known limitations* below. Tag and release only after
 those eleven items are ticked.
->>>>>>> _main
 
 ### Added
 
