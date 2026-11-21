@@ -20,4 +20,4 @@ def test_help_exits_zero(capsys) -> None:
 
 def test_unknown_argument_exits_two(capsys) -> None:
     assert main(["--not-a-flag"]) == 2
-    assert "unrecognised argument" in capsys.readouterr().err
+    assert "unrecognized arguments" in capsys.readouterr().err
