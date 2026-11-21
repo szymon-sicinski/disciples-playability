@@ -8,19 +8,23 @@ This repository ships **no game data and never will**: no `Disciple.exe`, no
 `.DBF`/`.dbi` tables, no art, audio, video or save files. It is software that
 operates on an installation **you already own**.
 
-> **Status: v0.1.0 release candidate — not yet verified in game.** The INI
-> rewriter, the launcher, the cnc-ddraw preset and pinned fetch, the `doctor`
-> subcommand, the Wine recipes and the read-only `data` scanner are
-> implemented and tested on synthetic fixtures, and the scanner was run
-> read-only against a retail install. No agent here has a display or Wine, so
-> every "it plays" claim is a human check:
-> [`docs/verification.md`](docs/verification.md), all eleven items
-> **UNVERIFIED**.
+> **Status: v0.1.0 release candidate.** The INI rewriter, the launcher, the
+> cnc-ddraw preset and pinned fetch, the `doctor` subcommand, the Wine recipes
+> and the read-only `data` scanner are implemented and tested on synthetic
+> fixtures. The maintainer's in-game runs (2026-11-21) reached the main menu
+> under **Heroic + Proton-GE**, with the install's original `X:\…` INI and with
+> the pack's **rewritten `Z:\…`** INI — see *What it fixes* below.
+> **What has not worked is the pack's own launch:** `disciples-play --game-dir …`
+> crashes at `0059559E` under plain `wine`. The other ten items in
+> [`docs/verification.md`](docs/verification.md) remain **UNVERIFIED**, and the
+> launch item stays unticked because it specifies the pack's command.
 
 ## What the pack is
 
-The game already runs under Wine; this is not a compatibility rescue, it is a
-portability and reproducibility problem. Upstream [`cnc-ddraw`](https://github.com/FunkyFr3sh/cnc-ddraw)
+The game runs under a **Proton** runner (Heroic, Lutris); plain Wine currently
+crashes at start-up for this title at `0059559E` —
+[`docs/wine-recipe.md`](docs/wine-recipe.md). This is not a compatibility
+rescue, it is a portability and reproducibility problem. Upstream [`cnc-ddraw`](https://github.com/FunkyFr3sh/cnc-ddraw)
 (MIT) already provides windowing, scaling and VSync and lists *Disciples*
 among its supported games. What is missing, and what this pack adds:
 
@@ -36,6 +40,20 @@ computes paths, rewrites one INI, stages nothing it does not own, and reports
 what it finds. It does not patch, unpack or redistribute the game; the only copy
 it ever makes is the sibling tree you ask for explicitly with `--ini-mode
 copy-tree`.
+
+**The pack guarantees the INI, not the launch.** Verified by the maintainer on
+2026-11-21 against the real GOG install: under plain `wine` (wine-staging 11.21)
+`Disciple.exe` dies with an access violation at `0059559E`, with or without the
+cnc-ddraw wrapper staged — while **Heroic + Proton-GE** reaches the main menu
+and plays with the install's **original `X:\…` INI**. So the Proton runner is
+what makes it run; nothing here fixes that crash. **The pack's own `Z:\…`
+rewrite also plays** under the same Proton runner (`--no-launch`, then Play in
+Heroic) — so the rewrite is what makes the install portable and the Proton
+runner is what makes it run. See [`docs/wine-recipe.md`](docs/wine-recipe.md). Because the launcher
+execs a single `wine` binary and cannot start into a Proton prefix, the
+supported sequence is `disciples-play --no-launch --game-dir …` and then
+**Play** in Heroic or Lutris — [`docs/wine-recipe.md`](docs/wine-recipe.md)
+"Start here".
 
 ## Scope: what it fixes, and what it does not
 
@@ -78,7 +96,8 @@ copy-tree`.
 
 ## Quick start
 
-Requires Python ≥ 3.10, `pipx` (or any Python installer) and Wine to play. No
+Requires Python ≥ 3.10, `pipx` (or any Python installer) and a **Proton**
+runner to play (plain Wine crashes at start-up for this title). No
 runtime dependencies.
 
 ```bash
@@ -86,7 +105,9 @@ pipx install .            # from a clone; needs pipx itself (Debian/Ubuntu: sudo
                           #   else python3 -m pip install --user pipx && ~/.local/bin/pipx ensurepath,
                           #   then open a NEW shell). Or: python3 -m pip install --user .
 disciples-play doctor --game-dir "$HOME/Games/Disciples Gold"
-disciples-play --game-dir "$HOME/Games/Disciples Gold"
+disciples-play --no-launch --game-dir "$HOME/Games/Disciples Gold"   # rewrite the 21 INI keys
+# then press Play in Heroic / Lutris with a PROTON runner.
+# Plain `wine` crashes at start-up for this title (0059559E) — docs/wine-recipe.md "Start here".
 ```
 
 **Your files stay yours.** The pack reads your install, rewrites one INI
@@ -110,7 +131,7 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 | [`docs/wine-recipe.md`](docs/wine-recipe.md) | Reproducible prefixes: plain `wine`, Bottles, Heroic/Proton |
 | [`docs/wrapper.md`](docs/wrapper.md) | The cnc-ddraw preset, why `hook=4`, the pinned fetch, the `ddraw=n,b` override, black-screen triage |
 | [`docs/data-layout.md`](docs/data-layout.md) | dBase III tables and `MQDB` containers, every claim graded **D**/**H**/**V**, open questions with falsifiers |
-| [`docs/verification.md`](docs/verification.md) | The eleven human checks that gate the tag — all **UNVERIFIED** |
+| [`docs/verification.md`](docs/verification.md) | The eleven human checks that gate the tag — all eleven unticked: the launch one blocked on plain Wine, the other ten awaiting a human run |
 | [`docs/plans/00-playability-plan.md`](docs/plans/00-playability-plan.md) | The spec: measured facts, scope, card graph, budget, risks |
 | [`THIRD_PARTY.md`](THIRD_PARTY.md) | Every component, its measured licence, and what may be shipped |
 
@@ -131,10 +152,15 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
 **Not verified — and this list is the honest boundary:**
 
-- The game reaching its main menu, the 3× window, Alt+Enter/Alt+Tab, mouse
-  targeting, palette animation, music without the CD, save/load, moving the
-  install, `Config.exe` behaviour, a second prefix: all eleven items in
-  [`docs/verification.md`](docs/verification.md) are **UNVERIFIED**.
+- All eleven boxes in [`docs/verification.md`](docs/verification.md) are
+  unticked. The launch item is blocked because it specifies this pack's command
+  — the menu *was* reached, through Heroic rather than through this launcher —
+  and the other ten (the 3× window, Alt+Enter/Alt+Tab, mouse targeting, palette
+  animation, music without the CD, save/load, moving the install, `Config.exe`
+  behaviour, a second prefix, cleanliness) await a human run.
+- Plain Wine as a launch environment for this title: it crashes at `0059559E`
+  (maintainer, 2026-11-21, with or without the wrapper staged). The launch
+  that did play was a **Proton** runner.
 - Windows as a target: CI green is not a play test.
 - The wrapper's one-line install: the module works, the CLI command does not
   exist yet.

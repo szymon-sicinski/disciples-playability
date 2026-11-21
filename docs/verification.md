@@ -1,10 +1,21 @@
 # Verification — what a human must run before v0.1.0 is real
 
-**Status: every item below is UNVERIFIED.** No agent in this project has a
-display or a Wine runtime, so nothing here has been observed in-game. The test
-suite proves the INI rewrite, the CLI contract, the doctor's checks and the
-data scanner against synthetic fixtures (216 tests) plus a read-only pass over
-the retail install (2 tests); it cannot prove the game *plays*.
+**Status: every item below is UNVERIFIED** — with one partial result recorded
+under item 1. No agent in this project has a display or a Wine runtime, so
+nothing here has been observed in-game by an agent. The test suite proves the
+INI rewrite, the CLI contract, the doctor's checks and the data scanner against
+synthetic fixtures (216 tests) plus a read-only pass over the retail install
+(2 tests); it cannot prove the game *plays*.
+
+**Partial result (maintainer, 2026-11-21):** the main menu **was** reached and
+the game played under **Heroic + Proton-GE** — by pressing Play in Heroic, with
+the install's **original `X:\…` INI** and, in a later run, with **the pack's
+rewritten `Z:\…` values** put in place by `disciples-play --no-launch`. What has
+not worked is the pack's own launch (`disciples-play --game-dir …`) under plain
+`wine`, which crashes at `0059559E`.
+Item 1 stays unticked for that reason. Plain `wine` crashes at start-up for
+this title (`0059559E`, null pointer in the graphics layer); the supported
+sequence is in [`wine-recipe.md`](wine-recipe.md) "Start here".
 
 This file is the release's honest boundary. Tick a box **only** after running
 that item on a real machine with the game, and record the machine, the date and
@@ -31,6 +42,7 @@ not a defect.
 
 - [ ] **UNVERIFIED** — **1. Main menu.** `Disciple.exe` reaches the main menu: no black screen, no error dialog.
   Command: `disciples-play --game-dir "$GAME"`. Record: what appeared, and the last 20 lines of terminal output if it did not.
+  Note (2026-11-21): the menu **was** reached, but by pressing Play in **Heroic + Proton-GE** — once with the install's original `X:\…` INI and once with the pack's rewritten `Z:\…` values in place. Not by the command above: under plain `wine` that command crashes at `0059559E` (`C0000005`, null pointer in the graphics layer), with or without the wrapper staged; see [`wine-recipe.md`](wine-recipe.md) "Start here". The box stays unticked until the pack's own command is what reaches the menu on some Wine build or prefix.
 - [ ] **UNVERIFIED** — **2. Window size.** The wrapper presents the game in a **640×480** window (the pack's base size, not a recorded video mode) and you resize it; record the size you settled on (1920×1440 = exactly 3×, 1280×960 = 2×) and whether the pixels stayed sharp.
   Note: the preset sets no window-size, `boxing` or `shader` key — it writes nine `[ddraw]` keys (`windowed`, `maintas`, `maxfps`, `vsync`, `adjmouse`, `savesettings`, `nonexclusive`, `hook`, `renderer`) and nothing else. Sharp integer scaling needs `boxing=true` or `shader=Nearest neighbor` added to `ddraw.ini` by hand (see [`wrapper.md`](wrapper.md)); record which one you used, because neither is the default.
 - [ ] **UNVERIFIED** — **3. Alt+Enter and Alt+Tab.** Alt+Enter toggles windowed/fullscreen; Alt+Tab away and back does not corrupt the display.
@@ -59,6 +71,8 @@ listed here rather than smoothed over; each one is visible to a user.
 
 | Gap | Where it bites | What would close it |
 |---|---|---|
+| **Plain-Wine start-up crash (`0059559E`).** `Disciple.exe` dies with `C0000005` — a null object from the graphics layer — under plain `wine` (wine-staging 11.21, default prefix): with the wrapper staged and `WINEDLLOVERRIDES=ddraw=n,b`, with no wrapper, and with `InWindow=0` or `InWindow=1`. `DDraw=0` starts with sound but a black screen. Heroic + Proton-GE plays. The pack's launcher execs a single `wine` binary and cannot drive Proton. | Following the launcher's own launch on a plain-Wine box (`disciples-play --game-dir …`, no `--no-launch`): an access violation instead of a game. | Nothing in this pack — a Wine-side fix, or a Proton-aware launch path after v0.1.0. Documented workaround: `disciples-play --no-launch`, then Play in Heroic/Lutris ([`wine-recipe.md`](wine-recipe.md) "Start here"). |
+| **The staged cnc-ddraw was never loaded.** Every plain-Wine crash dump so far lists `system32\ddraw.dll` and `wined3d.dll`; the `ddraw.dll` in `Exe\` never appears, so items 2–5 have no evidence that the wrapper engages at all. | Any windowing/scaling claim: the preset may be inert on this title. | A run whose module list names the staged DLL; if none exists, a loader/hook investigation (upstream `hook` modes) before v0.2 claims windowing. |
 | **No one-line wrapper install.** `disciples_play.wrapper` fetches the pinned `cnc-ddraw` release and writes the preset, but no CLI subcommand calls it yet. | A new user must copy `ddraw.dll`/`ddraw.ini` into `Exe/` by hand (quickstart §"Getting the window"). Without that, `windowed=1` never engages and items 2–5 cannot pass. | A small `disciples-play wrapper --install` card (needs `--game-dir`, the digest pin, the licence text, an overwrite guard — all already implemented as functions). |
 | **Windows is unclaimed.** CI runs the suite on `windows-latest` 3.10–3.13, but no human has launched the game on Windows. | Any "works on Windows" reading of a green CI badge. | One run on a Windows machine; then update this file and the README. |
 | **cnc-ddraw's release build writes no debug log.** `dbg_init()` is behind `#ifdef _DEBUG`, so a black screen leaves no `cnc-ddraw-*.log`. | Triage of a failed item 1. | Use the `experimental-debuglog` build for one run, as [`wine-recipe.md`](wine-recipe.md) says. |

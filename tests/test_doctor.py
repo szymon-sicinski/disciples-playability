@@ -196,6 +196,7 @@ def test_all_pass_exits_zero(
     }
     assert "25 .wav files in Music/" in out
     assert "wine-9.0 (synthetic)" in out
+    assert "use a Proton runner (see docs/wine-recipe.md)" in out
     assert "41 .smk files" in out
 
 
