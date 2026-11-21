@@ -240,6 +240,40 @@ def test_missing_video_is_a_fail(
     assert "PASS install:" in out
 
 
+def test_partial_video_count_is_a_fail(
+    tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """2 of 41 cutscenes must FAIL.
+
+    A truncated install is the case this check exists for, so ``total`` being
+    non-zero is not enough: only the exact count is a PASS.
+    """
+    root = make_install(tmp_path / "install", video=2, briefing=0, rewritten=True)
+    code = main(["doctor", "--game-dir", str(root)])
+    assert code == 1
+
+    out = capsys.readouterr().out
+    assert "FAIL video:" in out
+    assert "2 .smk files" in out
+    assert "expected 41" in out
+    assert "PASS install:" in out  # the install itself is fine
+
+
+def test_partial_music_count_is_a_fail(
+    tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """24 of 25 tracks must FAIL, symmetric with the video check."""
+    root = make_install(tmp_path / "install", music=24, rewritten=True)
+    code = main(["doctor", "--game-dir", str(root)])
+    assert code == 1
+
+    out = capsys.readouterr().out
+    assert "FAIL music:" in out
+    assert "24 .wav files in Music/" in out
+    assert "expected 25" in out
+    assert "PASS install:" in out
+
+
 def test_wrapper_digest_mismatch_is_a_warn(
     tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
 ) -> None:
