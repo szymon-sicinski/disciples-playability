@@ -30,8 +30,9 @@ anywhere, and never modifies anything outside that one INI unless you pass
 
 **`disciples-play doctor --game-dir …`** prints one `PASS`/`FAIL`/`WARN` line
 per check — install resolves, INI writable, installation paths absolute,
-`wine` present, `ddraw` override, wrapper staged, music count, video count,
-display — with a one-line fix hint on every non-PASS line. Exit `0` means no
+`wine` present, `ddraw` override, wrapper staged, the INI's own `InWindow`
+window mode, music count, video count, display — with a one-line fix hint on
+every non-PASS line. Exit `0` means no
 check failed (warnings do not fail it); `1` means something blocks play; `2` is
 a bad command line. It is read-only.
 
