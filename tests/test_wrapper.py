@@ -324,12 +324,27 @@ def test_resolve_exe_dir_resolves_the_install_root_to_exe(tmp_path: Path) -> Non
     assert wrapper.resolve_exe_dir(root) == exe_dir
 
 
-def test_resolve_exe_dir_prefers_the_given_directory(tmp_path: Path) -> None:
-    """A directory that holds the exe is taken at its word, nested ``Exe/`` or not."""
-    _, exe_dir = install_tree(tmp_path)
-    (exe_dir / "Exe").mkdir()
-    (exe_dir / "Exe" / "Disciple.exe").write_bytes(b"MZ")
-    assert wrapper.resolve_exe_dir(exe_dir) == exe_dir
+def test_resolve_exe_dir_refuses_a_mixed_tree_naming_both_paths(tmp_path: Path) -> None:
+    """``<d>/Disciple.exe`` plus ``<d>/Exe/Disciple.exe`` must not be guessed at.
+
+    Preferring ``<d>`` would install where ``launch`` (which uses ``<d>/Exe``)
+    never looks, so the tree is refused and nothing is written.
+    """
+    staging = staged_dir(tmp_path)
+    root, exe_dir = install_tree(tmp_path)
+    (root / "Disciple.exe").write_bytes(b"MZ")
+    (exe_dir / "DISCIPLE.INI").write_text("[Installation]\n", encoding="cp1252")
+    with pytest.raises(wrapper.WrapperInstallError) as exc:
+        wrapper.resolve_exe_dir(root)
+    assert str(root / "Disciple.exe") in str(exc.value)
+    assert str(exe_dir / "Disciple.exe") in str(exc.value)
+    with pytest.raises(wrapper.WrapperInstallError, match="ambiguous"):
+        wrapper.install_wrapper(root, staging)
+    assert not (root / "ddraw.dll").exists()
+    assert not (exe_dir / "ddraw.dll").exists()
+    # naming the intended directory exactly still works, and the launcher finds it
+    wrapper.install_wrapper(exe_dir, staging)
+    assert launch.wrapper_staged(launch.resolve_install(root).exe_dir)
 
 
 def test_resolve_exe_dir_refuses_a_directory_without_the_exe(tmp_path: Path) -> None:

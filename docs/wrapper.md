@@ -29,7 +29,7 @@ anywhere else is silently inert.
 `Exe/`:
 
 ```python
-wrapper.install_wrapper("<install>", staging)      # install root  -> <install>/Exe/
+wrapper.install_wrapper("<install>", staging)  # install root  -> <install>/Exe/
 wrapper.install_wrapper("<install>/Exe", staging)  # exe directory  -> same place
 ```
 

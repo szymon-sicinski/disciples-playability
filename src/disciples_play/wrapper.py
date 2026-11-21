@@ -314,18 +314,33 @@ def resolve_exe_dir(target: str | os.PathLike[str]) -> Path:
     a directory -- it resolves one of two shapes and refuses everything else:
 
     * ``target`` itself holds ``Disciple.exe`` -> ``target``;
-    * otherwise ``target/Exe/Disciple.exe`` exists -> ``target/Exe``, i.e. the
-      install root that :func:`disciples_play.launch.resolve_install` hands out.
+    * ``target/Exe/Disciple.exe`` exists -> ``target/Exe``, i.e. the install
+      root that :func:`disciples_play.launch.resolve_install` hands out.
+
+    A *mixed* tree -- ``target`` holds ``Disciple.exe`` **and**
+    ``target/Exe/Disciple.exe`` -- is ambiguous and raises
+    :class:`WrapperInstallError` naming both paths. Preferring ``target`` would
+    install the wrapper in the root while ``launch`` uses ``<root>/Exe`` as the
+    exe directory and looks for ``ddraw.dll`` there, leaving it inert; guessing
+    is worse than asking, so the caller passes the intended directory's exact
+    path (e.g. ``target/Exe``, after removing the stray copy if it is wrong).
 
     Anything else raises :class:`WrapperInstallError` naming both paths that
-    were tried. The nested shape is checked second on purpose: a directory that
-    holds the executable is taken at its word rather than being second-guessed.
+    were tried.
     """
     path = Path(target)
-    if path.is_dir() and (path / _EXE_NAME).is_file():
-        return path
     nested = path / _EXE_SUBDIR
-    if nested.is_dir() and (nested / _EXE_NAME).is_file():
+    here = path.is_dir() and (path / _EXE_NAME).is_file()
+    there = nested.is_dir() and (nested / _EXE_NAME).is_file()
+    if here and there:
+        raise WrapperInstallError(
+            f"ambiguous: both {path / _EXE_NAME} and {nested / _EXE_NAME} exist; "
+            f"the launcher uses {nested}, so pass that directory explicitly (or "
+            f"remove the stray {_EXE_NAME}) -- refusing to guess where the wrapper goes"
+        )
+    if here:
+        return path
+    if there:
         return nested
     raise WrapperInstallError(
         f"no {_EXE_NAME} in {path} (looked for {path / _EXE_NAME} and "
