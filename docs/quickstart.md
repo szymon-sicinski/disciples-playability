@@ -51,7 +51,9 @@ Today the pack contains the pinned fetch and preset as the
 wired yet**: copy `ddraw.dll` and `ddraw.ini` from the pinned `v7.1.0.0`
 release into the game's `Exe/` folder next to `Disciple.exe` (recipe:
 [`wine-recipe.md`](wine-recipe.md) §1d), keep the game itself fullscreen
-(`InWindow=0`), and run the launcher — it sets `WINEDLLOVERRIDES=ddraw=n,b`
+(`InWindow=0` — do **not** use the game's own window mode: `InWindow=1` on plain
+Wine is a known crash at start-up, not a window, and `doctor`'s `ini-window`
+line flags it), and run the launcher — it sets `WINEDLLOVERRIDES=ddraw=n,b`
 automatically once it finds the DLL. [`wrapper.md`](wrapper.md) documents the
 preset and the digest pin.
 

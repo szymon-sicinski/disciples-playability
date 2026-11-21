@@ -28,7 +28,7 @@ among its supported games. What is missing, and what this pack adds:
 |---|---|---|
 | 1 | `Exe\DISCIPLE.INI` hardcodes 21 absolute `X:\…` paths; move the folder and the game cannot find its data | Rewrites `[Installation]` / `[InstallationClient]` to the real install on every start, with a one-time `<name>.orig` backup; a second run is a byte-wise no-op |
 | 2 | cnc-ddraw is a zip you unpack and configure by hand per install | A curated `ddraw.ini` preset and a pinned (tag + size + SHA-256) fetch, shipped as a module; the one-line install command is **not wired yet** |
-| 3 | The Wine prefix is hand-made, so a second machine is a second adventure | A `doctor` subcommand with nine checkable lines, plus copy-paste prefix recipes (plain `wine`, Bottles, Heroic/Proton) |
+| 3 | The Wine prefix is hand-made, so a second machine is a second adventure | A `doctor` subcommand with ten checkable lines, plus copy-paste prefix recipes (plain `wine`, Bottles, Heroic/Proton) |
 | 4 | The data layer (131 dBase III tables, 19 `MQDB` containers) is undocumented | A fact-graded data-layout document and a read-only `data` subcommand |
 
 The pack is a **launcher and a configuration layer**. It resolves the install,
@@ -58,10 +58,10 @@ copy-tree`.
   alone. Neither writes.
 - **Three INI modes** — `backup` (default: in place + `.orig` once), `inplace`,
   `copy-tree` (leaves the GOG folder pristine at the cost of a 645 MB copy).
-- **`doctor`** — nine `PASS`/`FAIL`/`WARN` lines (install, INI, installation
-  paths, wine, ddraw override, wrapper, music, video, display), a one-line fix
-  hint on every non-PASS line, and a stable `--json` schema. Read-only, and it
-  never prints a game hash.
+- **`doctor`** — ten `PASS`/`FAIL`/`WARN` lines (install, INI, installation
+  paths, wine, ddraw override, wrapper, `InWindow`, music, video, display), a
+  one-line fix hint on every non-PASS line, and a stable `--json` schema.
+  Read-only, and it never prints a game hash.
 - **`data`** — a read-only structural inventory of the install: per-table dBase
   III geometry with closing header arithmetic, `MQDB` chunk offsets/sizes with
   competing hypotheses scored, ID cross-reference counts, plain-text digests.
@@ -101,6 +101,16 @@ the one-line install command is not wired yet — copy `ddraw.dll` and
 `ddraw.ini` from the pinned `v7.1.0.0` release into `Exe/` (it is **not**
 committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
+> **Do not reach for the game's own window mode.** `InWindow=1` in
+> `Exe/DISCIPLE.INI` is a **known crash at start-up on plain Wine**: the first
+> real run of v0.1.0 (2026-11-21) died with `C0000005` in display
+> initialisation, before the game wrote `Disciple.log`, while the same install
+> had played with `InWindow=0`. The supported windowed path is cnc-ddraw
+> presenting a **fullscreen** game (`InWindow=0`), and v0.1 does not install
+> cnc-ddraw automatically. `doctor` reports the setting as its `ini-window`
+> line — `PASS` for `InWindow=0`, `WARN` for `InWindow=1` or a missing key —
+> and never rewrites it: that key is your display choice, not a path.
+
 ## Documentation
 
 | Document | What it answers |
@@ -118,7 +128,7 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
 **Verified here** (commands in [`docs/verification.md`](docs/verification.md#what-the-agents-did-verify-for-contrast)):
 
-- 216 synthetic-fixture tests pass; 2 read-only tests pass against a retail
+- 223 synthetic-fixture tests pass; 2 read-only tests pass against a retail
   install; `ruff check` and `ruff format --check` are clean.
 - CI: pytest + ruff on ubuntu-latest and windows-latest, Python 3.10, 3.11,
   3.12, 3.13, plus a `disciples-play --help` smoke test per cell.

@@ -3,7 +3,7 @@
 **Status: every item below is UNVERIFIED.** No agent in this project has a
 display or a Wine runtime, so nothing here has been observed in-game. The test
 suite proves the INI rewrite, the CLI contract, the doctor's checks and the
-data scanner against synthetic fixtures (216 tests) plus a read-only pass over
+data scanner against synthetic fixtures (223 tests) plus a read-only pass over
 the retail install (2 tests); it cannot prove the game *plays*.
 
 This file is the release's honest boundary. Tick a box **only** after running
@@ -21,9 +21,19 @@ disciples-play doctor --game-dir "$GAME"
 
 **Items 2–5 precondition:** the wrapper only presents a window when the *game*
 is fullscreen, i.e. `InWindow=0` in `Exe/DISCIPLE.ini`. The launcher never writes
-that key and a retail install may ship `InWindow=1`, so check it before running
-items 2–5 — otherwise you will record a windowing failure that is a setting,
-not a defect.
+that key (the 21 installation paths are the only thing it rewrites) and a retail
+install may ship `InWindow=1`, so set it before running items 2–5 — otherwise
+you will record a windowing failure that is a setting, not a defect.
+
+`doctor` reports the key as its **`ini-window`** line: `PASS` for
+`InWindow=0`, `WARN` for `InWindow=1` (with or without cnc-ddraw — the wrapper
+expects a fullscreen game either way) and `WARN` for a missing key. That WARN is
+not a ticked box, and it is not a substitute for these items; it names the same
+consequence from the run that produced this file. `InWindow=1` with no cnc-ddraw
+is the configuration that crashed at start-up on stock Wine in the first real run
+of v0.1.0 (2026-11-21, `main` `e7fe136f`: `Exception C0000005`, before
+`Disciple.log` was written), so treat a start-up crash in items 1–2 as this
+setting until the line reads `InWindow=0`.
 
 ---
 
@@ -59,6 +69,7 @@ listed here rather than smoothed over; each one is visible to a user.
 
 | Gap | Where it bites | What would close it |
 |---|---|---|
+| **`InWindow=1` on plain Wine crashes at start-up.** Observed 2026-11-21: `Exception C0000005` in display initialisation with `InWindow=1` and no cnc-ddraw staged, while the same install played with `InWindow=0`. | A user who edits `Exe/DISCIPLE.INI` to get a window — without cnc-ddraw there is no window, only a crash. | Reported by `doctor`'s `ini-window` line (WARN, with the fix hint); the one-line cnc-ddraw install planned for v0.2 would make the supported windowed path a single command instead of a manual copy. |
 | **No one-line wrapper install.** `disciples_play.wrapper` fetches the pinned `cnc-ddraw` release and writes the preset, but no CLI subcommand calls it yet. | A new user must copy `ddraw.dll`/`ddraw.ini` into `Exe/` by hand (quickstart §"Getting the window"). Without that, `windowed=1` never engages and items 2–5 cannot pass. | A small `disciples-play wrapper --install` card (needs `--game-dir`, the digest pin, the licence text, an overwrite guard — all already implemented as functions). |
 | **Windows is unclaimed.** CI runs the suite on `windows-latest` 3.10–3.13, but no human has launched the game on Windows. | Any "works on Windows" reading of a green CI badge. | One run on a Windows machine; then update this file and the README. |
 | **cnc-ddraw's release build writes no debug log.** `dbg_init()` is behind `#ifdef _DEBUG`, so a black screen leaves no `cnc-ddraw-*.log`. | Triage of a failed item 1. | Use the `experimental-debuglog` build for one run, as [`wine-recipe.md`](wine-recipe.md) says. |
@@ -77,11 +88,14 @@ Run at the M6 head on Linux, Python 3.14 (the maintainer's Python 3.10–3.13 is
 covered by CI):
 
 ```bash
-python -m pytest -q                    # 216 passed, 2 skipped (realgame)
+python -m pytest -q                    # 223 passed, 2 skipped (realgame)
 DISCIPLES_GAME_DIR="/game-files/Disciples Gold" python -m pytest -q tests/test_realgame.py
                                        # 2 passed, read-only against the retail copy
 ruff check . && ruff format --check .  # clean
 disciples-play data --game-dir "/game-files/Disciples Gold" --json   # exit 0, 314 files
+disciples-play doctor --game-dir "/game-files/Disciples Gold"
+                                       # exit 1 (the read-only mount: FAIL ini/ini-paths);
+                                       # ini-window WARNs on the retail INI's real InWindow=1
 ```
 
 That proves the code does what it says on the data it was given. It does not

@@ -25,6 +25,43 @@ disciples-play doctor --game-dir "/path/to/Disciples Gold"
 
 ---
 
+## Known crash: the game's own windowed mode (`InWindow=1`)
+
+On **2026-11-21** the first real in-game run of v0.1.0 (`main` `e7fe136f`)
+crashed at start-up. The install that had played and the install that crashed
+differed in exactly one setting:
+
+```
+Exe/DISCIPLE.INI   InWindow=0   the config that played    (fullscreen, retail baseline)
+                   InWindow=1   crashes at start-up: Exception C0000005, "write to
+                                location 0" -- a null-vtable virtual call during
+                                display initialisation, before Disciple.log is written
+```
+
+So **plain Wine with the game's own window mode (`InWindow=1`) is a known
+crash**, not a way to get a window. The supported windowed path is cnc-ddraw
+presenting a **fullscreen** game:
+
+1. Set `InWindow=0` in `Exe/DISCIPLE.INI`. The launcher never writes this key —
+   it rewrites only the 21 installation paths — because the display mode is your
+   choice, not a path.
+2. Stage cnc-ddraw (`ddraw.dll` + `ddraw.ini`) next to `Disciple.exe` and make
+   sure the `ddraw=n,b` override is in effect. **v0.1 does not install cnc-ddraw
+   automatically**: the pinned fetch and preset exist in
+   `disciples_play.wrapper`, but no CLI subcommand calls them, so copy the two
+   files by hand from the pinned `v7.1.0.0` release (see
+   [`wrapper.md`](wrapper.md)).
+3. Check the `ini-window` line of `disciples-play doctor`: `PASS` for
+   `InWindow=0`, `WARN` for `InWindow=1` (with or without cnc-ddraw: the wrapper
+   expects a fullscreen game either way) and `WARN` for a missing key.
+
+Nothing here claims the crash is *fixed* — windowed mode without cnc-ddraw is
+simply not a configuration this pack supports. If setting `InWindow=0` still
+leaves a start-up crash, that is a different defect: open an issue with the
+terminal output and your Wine version.
+
+---
+
 ## 1. Plain Wine
 
 The simplest path: one prefix, one override, done. The override can be set two

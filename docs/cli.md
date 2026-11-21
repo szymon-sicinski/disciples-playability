@@ -126,6 +126,7 @@ hand-made prefix. The checks, in order:
 | `wine` | `wine` present and reports a `--version`. **FAIL** on POSIX when absent (the launcher cannot run without it); PASS "not needed" on Windows. |
 | `ddraw-override` | `WINEDLLOVERRIDES` routes `ddraw` to native (`ddraw=n…` — a bare `ddraw=b`/`ddraw=d`/`ddraw=` does **not** count), or the wrapper is staged next to the exe (which the launcher overrides automatically) |
 | `wrapper` | cnc-ddraw's `ddraw.dll` staged with a marker file matching its digest (mismatch → WARN "not ours, leaving it alone") |
+| `ini-window` | `[Disciple] InWindow`, the game's **own** display mode. `InWindow=0` PASS (the fullscreen baseline cnc-ddraw needs); `InWindow=1` WARN — without cnc-ddraw staged it is the configuration that crashed at start-up on stock Wine (first real v0.1.0 run: `C0000005` in display initialisation, before `Disciple.log` is written), and with cnc-ddraw staged the game is still windowed while the wrapper wants it fullscreen. A missing key is a WARN too (the retail default is unknown). The doctor never writes this key: it is the user's display choice, and the launcher rewrites only the 21 installation paths. |
 | `music` | 25 `.wav` files in `Music/` (count and size only) |
 | `video` | 41 `.smk` cutscenes — 6 in `Video/` + 35 in `Briefing/` (count and size only) |
 | `display` | an X display is available (WARN "no X display: cannot verify windowing" when `DISPLAY` is unset) |
