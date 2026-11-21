@@ -12,6 +12,6 @@ wrapper preset land in M1-M3 of ``docs/plans/00-playability-plan.md``.
 
 from __future__ import annotations
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"
 
 __all__ = ["__version__"]

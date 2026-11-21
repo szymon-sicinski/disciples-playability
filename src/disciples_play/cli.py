@@ -95,7 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="backup",
         help=(
             "how DISCIPLE.INI is updated (default: backup = in place, saving "
-            "DISCIPLE.INI.orig once; copy-tree = operate on a pristine sibling copy)"
+            "<name>.orig once; copy-tree = operate on a pristine sibling copy)"
         ),
     )
     parser.add_argument(

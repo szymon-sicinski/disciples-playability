@@ -83,7 +83,9 @@ unchanged), and never overwrites an existing `.orig`.
 The three modes:
 
 * **`backup` (default)** — write `Exe/DISCIPLE.INI` in place, saving
-  `DISCIPLE.INI.orig` exactly once and never overwriting it afterwards. This is
+  `<the existing INI's name>.orig` exactly once and never overwriting it
+  afterwards (`DISCIPLE.INI.orig` for the canonical spelling, `DISCIPLE.ini.orig`
+  when the install carries the lowercase one the game writes back). This is
   the "re-apply on every launch" mode: `Config.exe` may rewrite the INI, so the
   launcher re-applies it each start.
 * **`inplace`** — write in place, never back up.
