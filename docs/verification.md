@@ -25,8 +25,8 @@ disciples-play doctor --game-dir "$GAME"
 
 - [ ] **UNVERIFIED** — **1. Main menu.** `Disciple.exe` reaches the main menu: no black screen, no error dialog.
   Command: `disciples-play --game-dir "$GAME"`. Record: what appeared, and the last 20 lines of terminal output if it did not.
-- [ ] **UNVERIFIED** — **2. Window size.** The window opens at **1920×1440** (3× of 640×480) on the 2560×1440 display, integer-scaled and not blurry; if it does not, record the fallback actually used (2× = 1280×960).
-  Note: the preset's default is `windowed=1` + `maintas=1` at a 640×480 native window; crisp integer pixels need `boxing=true` or `shader=Nearest neighbor` in `ddraw.ini` (see [`wrapper.md`](wrapper.md)), so record which of the two you tried.
+- [ ] **UNVERIFIED** — **2. Window size.** The window opens at the game's native **640×480** and you resize it; record the size you settled on (1920×1440 = exactly 3×, 1280×960 = 2×) and whether the pixels stayed sharp.
+  Note: the preset does **not** set a window size, `boxing` or `shader` — it ships `windowed=1` + `maintas=1` and nothing else. Sharp integer scaling needs `boxing=true` or `shader=Nearest neighbor` added to `ddraw.ini` by hand (see [`wrapper.md`](wrapper.md)); record which one you used, because neither is the default.
 - [ ] **UNVERIFIED** — **3. Alt+Enter and Alt+Tab.** Alt+Enter toggles windowed/fullscreen; Alt+Tab away and back does not corrupt the display.
   Record: both transitions, and whether colours/size survive the round trip.
 - [ ] **UNVERIFIED** — **4. Mouse targeting at 3×.** Clicking a map tile and a menu button hits what is under the cursor at 3× scale; the cursor does not escape to the second monitor.

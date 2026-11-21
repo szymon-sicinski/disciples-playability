@@ -33,7 +33,9 @@ among its supported games. What is missing, and what this pack adds:
 
 The pack is a **launcher and a configuration layer**. It resolves the install,
 computes paths, rewrites one INI, stages nothing it does not own, and reports
-what it finds. It does not patch, unpack, copy or redistribute the game.
+what it finds. It does not patch, unpack or redistribute the game; the only copy
+it ever makes is the sibling tree you ask for explicitly with `--ini-mode
+copy-tree`.
 
 ## Scope: what it fixes, and what it does not
 
@@ -75,24 +77,34 @@ what it finds. It does not patch, unpack, copy or redistribute the game.
 
 ## Quick start
 
-Requires Python ≥ 3.10 and Wine to play. No runtime dependencies.
+Requires Python ≥ 3.10, `pipx` (or any Python installer) and Wine to play. No
+runtime dependencies.
 
 ```bash
-pipx install .            # from a clone; or: pip install -e .
+pipx install .            # from a clone; needs pipx itself:
+                          #   python3 -m pip install --user pipx && ~/.local/bin/pipx ensurepath
+                          # or: python3 -m pip install --user .
 disciples-play doctor --game-dir "$HOME/Games/Disciples Gold"
 disciples-play --game-dir "$HOME/Games/Disciples Gold"
 ```
 
 **Your files stay yours.** The pack reads your install, rewrites one INI
-(keeping `DISCIPLE.INI.orig`), and starts the game you own; nothing is uploaded
-and no game data is shipped. Full walk-through:
+(keeping a `<name>.orig` backup — `DISCIPLE.ini.orig` when the install carries
+the lowercase spelling), and starts the game you own; nothing is uploaded and no
+game data is shipped. Full walk-through:
 [`docs/quickstart.md`](docs/quickstart.md).
+
+A **window** additionally needs cnc-ddraw, and in v0.1 that step is **manual**:
+the pack ships the preset and the pinned fetch as `disciples_play.wrapper`, but
+the one-line install command is not wired yet — copy `ddraw.dll` and
+`ddraw.ini` from the pinned `v7.1.0.0` release into `Exe/` (it is **not**
+committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
 ## Documentation
 
 | Document | What it answers |
 |---|---|
-| [`docs/quickstart.md`](docs/quickstart.md) | Three commands from a clean machine to a game in a window |
+| [`docs/quickstart.md`](docs/quickstart.md) | Three commands from a clean machine to a repaired install (plus the wrapper step for a window) |
 | [`docs/cli.md`](docs/cli.md) | The CLI: flags, install resolution, rewrite modes, exit codes, doctor and data contracts |
 | [`docs/wine-recipe.md`](docs/wine-recipe.md) | Reproducible prefixes: plain `wine`, Bottles, Heroic/Proton |
 | [`docs/wrapper.md`](docs/wrapper.md) | The cnc-ddraw preset, why `hook=4`, the pinned fetch, the `ddraw=n,b` override, black-screen triage |

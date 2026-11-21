@@ -5,7 +5,8 @@ A clean machine with Python ≥ 3.10 and Wine installed is enough. The pack has
 
 ```bash
 # 1. install (from a clone of this repository)
-pipx install .            # or: pip install -e .
+pipx install .            # if pipx is missing: python3 -m pip install --user pipx && ~/.local/bin/pipx ensurepath
+                          # any other installer works too, e.g. python3 -m pip install --user .
 # 2. check the install, the Wine side and the data files — one line per check
 disciples-play doctor --game-dir "$HOME/Games/Disciples Gold"
 # 3. rewrite the INI paths and play
@@ -13,9 +14,11 @@ disciples-play --game-dir "$HOME/Games/Disciples Gold"
 ```
 
 **Your files stay yours.** The pack only reads your installation, rewrites
-`Exe/DISCIPLE.INI` once (keeping `DISCIPLE.INI.orig`), and starts the game you
-already own; it ships no game data, sends nothing anywhere, and never modifies
-anything outside that one INI unless you pass `--ini-mode copy-tree`.
+`Exe/DISCIPLE.INI` once (keeping a backup under the *existing* file's name plus
+`.orig` — `DISCIPLE.ini.orig` if your install carries the lowercase spelling),
+and starts the game you already own; it ships no game data, sends nothing
+anywhere, and never modifies anything outside that one INI unless you pass
+`--ini-mode copy-tree`, which works on a sibling copy of the whole install.
 
 ## What each command does
 
