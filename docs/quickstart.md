@@ -72,8 +72,9 @@ preset and the digest pin.
 Everything that needs a human on a machine with a display and Wine is
 **UNVERIFIED** in [`verification.md`](verification.md) — with one partial result
 recorded there: the game *does* reach its main menu, launched by pressing Play in
-Heroic or Lutris with a Proton runner. What remains unproven is the pack's own
-command (`disciples-play --game-dir …` crashes under plain `wine`), the 3× window,
+Heroic with a Proton-GE runner. Lutris follows the same recipe but has not been
+run. What remains unproven is the pack's own command — `disciples-play
+--game-dir …` crashes under plain `wine` — and, among the rest, the 3× window,
 palette animation, mouse targeting, music without the CD, portability after
-moving the folder, and a second prefix. Read that file before
-believing any claim in this repository about the game *playing*.
+moving the folder, and a second prefix. Read that file before believing any
+claim in this repository about the game *playing*.
