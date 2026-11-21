@@ -10,8 +10,8 @@ cnc-ddraw's "unzip by hand and configure per install" into three reproducible
 functions:
 
 > **Measured caveat (maintainer, 2026-11-21):** on the real GOG install the
-> staged `ddraw.dll` was **never loaded** — every plain-Wine crash dump,
-> failing and working, name `C:\windows\system32\ddraw.dll` and `wined3d.dll`.
+> staged `ddraw.dll` was **never loaded** — every plain-Wine crash dump names
+> `C:\windows\system32\ddraw.dll` and `wined3d.dll`.
 > So the takeover described above is unproven for this title, and the wrapper is
 > not credited with any working run. It also does not fix the plain-Wine
 > start-up crash (`0059559E`) — that is an environment problem; see

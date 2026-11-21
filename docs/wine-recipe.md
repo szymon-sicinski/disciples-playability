@@ -44,9 +44,11 @@ disciples-play --no-launch --game-dir "<install>"   # rewrites the 21 keys only
 One fact to keep straight, because it changes what the pack is for: both INIs
 play under that Proton runner — the install's **original `X:\…` values** and the
 pack's **rewritten `Z:\…` values**. The rewrite is not what makes the game run;
-the Proton runner is. What the rewrite buys is *portability*: a folder you move
-still finds its data. §3 records both runs, including the earlier one that was
-mis-recorded as using the rewrite when it was not.
+the Proton runner is. What the rewrite buys is that the game boots with the
+values the pack wrote where the pack wrote them; whether a *moved* folder still
+finds its data is item 8 of the checklist, still unticked. §3 records both runs,
+including the earlier one that was mis-recorded as using the rewrite when it was
+not.
 
 **cnc-ddraw was not in the picture in any of those runs.** Every plain-Wine
 crash dump lists `C:\windows\system32\ddraw.dll` and

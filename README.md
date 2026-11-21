@@ -131,7 +131,7 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 | [`docs/wine-recipe.md`](docs/wine-recipe.md) | Reproducible prefixes: plain `wine`, Bottles, Heroic/Proton |
 | [`docs/wrapper.md`](docs/wrapper.md) | The cnc-ddraw preset, why `hook=4`, the pinned fetch, the `ddraw=n,b` override, black-screen triage |
 | [`docs/data-layout.md`](docs/data-layout.md) | dBase III tables and `MQDB` containers, every claim graded **D**/**H**/**V**, open questions with falsifiers |
-| [`docs/verification.md`](docs/verification.md) | The eleven human checks that gate the tag — ten still **UNVERIFIED**, the launch one blocked on plain Wine |
+| [`docs/verification.md`](docs/verification.md) | The eleven human checks that gate the tag — all eleven unticked: the launch one blocked on plain Wine, the other ten awaiting a human run |
 | [`docs/plans/00-playability-plan.md`](docs/plans/00-playability-plan.md) | The spec: measured facts, scope, card graph, budget, risks |
 | [`THIRD_PARTY.md`](THIRD_PARTY.md) | Every component, its measured licence, and what may be shipped |
 
@@ -152,11 +152,12 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
 **Not verified — and this list is the honest boundary:**
 
-- The pack's own launch reaching the menu, the 3× window, Alt+Enter/Alt+Tab,
-  mouse targeting, palette animation, music without the CD, save/load, moving
-  the install, `Config.exe` behaviour, a second prefix: those ten items in
-  [`docs/verification.md`](docs/verification.md) are **UNVERIFIED**. The menu
-  *was* reached — through Heroic, not through this pack's launcher.
+- All eleven boxes in [`docs/verification.md`](docs/verification.md) are
+  unticked. The launch item is blocked because it specifies this pack's command
+  — the menu *was* reached, through Heroic rather than through this launcher —
+  and the other ten (the 3× window, Alt+Enter/Alt+Tab, mouse targeting, palette
+  animation, music without the CD, save/load, moving the install, `Config.exe`
+  behaviour, a second prefix, cleanliness) await a human run.
 - Plain Wine as a launch environment for this title: it crashes at `0059559E`
   (maintainer, 2026-11-21, with or without the wrapper staged). The launch
   that did play was a **Proton** runner.
