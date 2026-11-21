@@ -115,8 +115,8 @@ def make_install(
 
     ``inwindow`` is the ``[Disciple] InWindow`` value written into the INI
     (``"0"`` by default -- the fullscreen baseline); ``None`` leaves the key
-    out, and ``"1"`` is the windowed mode that crashed at start-up on stock
-    Wine.
+    out, and ``"1"`` asks the game for its own window, which needs a staged
+    cnc-ddraw to be supported.
     """
     exe_dir = base / "Exe"
     exe_dir.mkdir(parents=True)
@@ -607,17 +607,22 @@ def test_ddraw_override_reads_env(
 
 # --- ini-window: the game's own display mode ----------------------------------
 #
-# The first real in-game run of v0.1.0 crashed at start-up with [Disciple]
-# InWindow=1 and no cnc-ddraw staged (C0000005 in display initialisation, before
-# Disciple.log is written); the same install played with InWindow=0. These tests
-# pin the doctor's verdicts on that one difference, with the consequence
-# sentence spelled out here rather than imported, so rewording the check cannot
-# silently rewrite the contract.
+# ``InWindow`` selects the game's own window mode; windowed presentation comes
+# from cnc-ddraw. So ``InWindow=1`` without a staged wrapper is an unsupported
+# configuration -- a WARN -- but it is NOT the cause of the start-up crash at
+# 0059559E (that crash happens with InWindow=0 as well; display mode was tested
+# and falsified). These tests pin the verdicts and the wording, and the last one
+# asserts the check never claims to prevent a crash.
 
-WINDOWED_CRASH = (
-    "windowed mode without cnc-ddraw is the configuration that crashes at "
-    "start-up on stock Wine; the launcher does not write this key"
+WINDOWED_NEEDS_WRAPPER = (
+    "windowed presentation needs cnc-ddraw; the launcher does not write this key"
 )
+
+
+def _line_for(out: str, check_id: str) -> str:
+    """Return the single output line for ``check_id``."""
+    (line,) = [ln for ln in out.splitlines() if ln.split(":", 1)[0].endswith(f" {check_id}")]
+    return line
 
 
 def test_ini_window_windowed_without_wrapper_is_a_warn(
@@ -634,9 +639,27 @@ def test_ini_window_windowed_without_wrapper_is_a_warn(
 
     out = capsys.readouterr().out
     assert "WARN ini-window:" in out
-    assert WINDOWED_CRASH in out  # the consequence, verbatim
+    assert WINDOWED_NEEDS_WRAPPER in out
     assert "InWindow=0" in out  # and how to set it
     assert "PASS ini-window:" not in out
+
+
+def test_ini_window_windowed_without_wrapper_claims_no_crash(
+    tmp_path: Path,
+    fake_wine,
+    with_display,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The display-mode theory of the start-up crash was falsified: say nothing."""
+    monkeypatch.delenv("WINEDLLOVERRIDES", raising=False)
+    root = make_install(tmp_path / "install", inwindow="1", rewritten=True)
+    assert main(["doctor", "--game-dir", str(root)]) == 0
+
+    line = _line_for(capsys.readouterr().out, "ini-window").lower()
+    assert "warn ini-window" in line
+    for forbidden in ("crash", "0059559e", "c0000005", "start-up"):
+        assert forbidden not in line
 
 
 def test_ini_window_fullscreen_is_a_pass(
@@ -672,31 +695,30 @@ def test_ini_window_missing_key_is_a_warn(
     assert "WARN ini-window:" in out
     assert "no [Disciple] InWindow key" in out
     assert "retail default is unknown" in out
-    assert WINDOWED_CRASH in out
+    assert WINDOWED_NEEDS_WRAPPER in out
     assert "InWindow=0" in out
 
 
-def test_ini_window_windowed_with_wrapper_warns_that_it_fights_the_wrapper(
+def test_ini_window_windowed_with_wrapper_is_a_pass(
     tmp_path: Path,
     fake_wine,
     with_display,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """cnc-ddraw staged does not make InWindow=1 safe: the wrapper wants fullscreen."""
+    """With cnc-ddraw staged, windowed presentation is supported -- no WARN."""
     monkeypatch.delenv("WINEDLLOVERRIDES", raising=False)
     root = make_install(tmp_path / "install", with_wrapper=True, inwindow="1", rewritten=True)
     code = main(["doctor", "--game-dir", str(root)])
     assert code == 0
 
     out = capsys.readouterr().out
-    assert "WARN ini-window:" in out
-    assert "a game that is itself windowed fights it" in out
-    assert "ddraw.dll staged next to Disciple.exe" in out
-    assert "PASS ini-window:" not in out
+    assert "PASS ini-window:" in out
+    assert "with cnc-ddraw staged" in out
+    assert "WARN ini-window:" not in out
 
 
-def test_ini_window_windowed_with_env_override_still_warns(
+def test_ini_window_windowed_with_env_override_is_a_pass(
     tmp_path: Path,
     fake_wine,
     with_display,
@@ -710,9 +732,9 @@ def test_ini_window_windowed_with_env_override_still_warns(
     assert code == 0
 
     out = capsys.readouterr().out
-    assert "WARN ini-window:" in out
+    assert "PASS ini-window:" in out
     assert "WINEDLLOVERRIDES=" in out
-    assert "fights it" in out
+    assert "WARN ini-window:" not in out
 
 
 def test_ini_window_key_is_matched_case_insensitively(
@@ -732,7 +754,7 @@ def test_ini_window_key_is_matched_case_insensitively(
 
     out = capsys.readouterr().out
     assert "WARN ini-window:" in out
-    assert WINDOWED_CRASH in out
+    assert WINDOWED_NEEDS_WRAPPER in out
 
 
 def test_ini_window_unrecognised_value_is_a_warn(

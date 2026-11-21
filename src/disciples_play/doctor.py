@@ -33,9 +33,10 @@ The checks, in output order:
 ``ddraw-override`` a ``ddraw`` override routes ``ddraw`` to native (env or wrapper)
 ``wrapper``      cnc-ddraw staged with a marker matching the DLL's digest
 ``ini-window``   ``[Disciple] InWindow`` -- the game's own display mode. ``0`` is
-                 the fullscreen baseline cnc-ddraw needs; ``1`` without a
-                 wrapper is the configuration that crashes at start-up on stock
-                 Wine. The doctor never writes the key (it is the user's choice)
+                 the fullscreen baseline; ``1`` without a staged cnc-ddraw is an
+                 unsupported way to ask for a window, because windowed
+                 presentation comes from the wrapper. The doctor never writes the
+                 key (it is the user's choice)
 ``music``        25 ``.wav`` files in ``Music/``
 ``video``        41 ``.smk`` cutscenes (6 ``Video/`` + 35 ``Briefing/``)
 ``display``      an X display is available to verify windowing
@@ -78,14 +79,14 @@ _EXPECTED_MUSIC_WAVS = 25
 #: plus 35 in ``Briefing/``.
 _EXPECTED_VIDEO_SMKS = 41
 
-#: The consequence sentence every windowed-mode WARN carries. ``InWindow=1`` is
-#: the one configuration observed to crash at start-up on stock Wine (first real
-#: v0.1.0 run, 2026-11-21: C0000005 in display initialisation, before the game
-#: writes ``Disciple.log``), and the launcher deliberately does not rewrite the
-#: key -- it is the user's display choice, unlike the 21 installation paths.
-_WINDOWED_CRASH_NOTE = (
-    "windowed mode without cnc-ddraw is the configuration that crashes at "
-    "start-up on stock Wine; the launcher does not write this key"
+#: What every ``InWindow=1`` WARN without a wrapper says: windowed presentation is
+#: the wrapper's job, and the launcher deliberately does not rewrite the display
+#: key -- it is the user's choice, unlike the 21 installation paths. This is a
+#: configuration statement only: the start-up crash at ``0059559E`` that opened
+#: this card also happens with ``InWindow=0``, so display mode is not its cause
+#: and this check makes no claim about crashing.
+_WINDOWED_NEEDS_WRAPPER = (
+    "windowed presentation needs cnc-ddraw; the launcher does not write this key"
 )
 
 #: Values of ``[Disciple] InWindow`` read as "the game makes its own window" and
@@ -401,12 +402,15 @@ def _ddraw_override_check(exe_dir: Path | None) -> Check:
 def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | None) -> Check:
     """Check ``[Disciple] InWindow`` -- whether the *game* makes its own window.
 
-    This is the one setting the two real runs differed on: the install that
-    played had ``InWindow=0`` (fullscreen), the install that crashed at
-    start-up had ``InWindow=1``. ``InWindow=1`` is therefore a WARN whether or
-    not cnc-ddraw is staged -- without a wrapper it is the known stock-Wine
-    crash, and with one it still fights the wrapper, which expects a fullscreen
-    game and presents the window itself.
+    ``InWindow`` selects the game's **own** window mode; windowed presentation in
+    this pack comes from cnc-ddraw instead, so ``InWindow=1`` without a staged
+    wrapper asks for something nothing implements and is a WARN. A missing key is
+    a WARN too (the retail default is unknown).
+
+    This is a configuration guard, **not** a crash guard. The start-up
+    ``C0000005`` at ``0059559E`` that opened this work happens with
+    ``InWindow=0`` as well, so display mode is not its cause; nothing here claims
+    to prevent it.
 
     The check only reads: ``InWindow`` is the user's display choice, so neither
     the doctor nor the launcher writes it (the launcher rewrites the 21 path
@@ -427,8 +431,9 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
             "ini-window",
             WARN,
             "DISCIPLE.INI has no [Disciple] InWindow key (the retail default is "
-            f"unknown); {_WINDOWED_CRASH_NOTE} -- set InWindow=0 in Exe/DISCIPLE.INI "
-            "for the fullscreen baseline",
+            f"unknown); {_WINDOWED_NEEDS_WRAPPER} -- set InWindow=0 in "
+            "Exe/DISCIPLE.INI to run the game fullscreen, or stage cnc-ddraw for "
+            "a window (docs/wrapper.md)",
         )
 
     normalised = value.strip().lower()
@@ -436,8 +441,8 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
         return Check(
             "ini-window",
             PASS,
-            f"[Disciple] InWindow={value.strip()} (the game fullscreen -- the mode the "
-            "wrapper expects; cnc-ddraw presents the window when staged)",
+            f"[Disciple] InWindow={value.strip()} (the game fullscreen -- the baseline "
+            "the Wine recipes use; cnc-ddraw presents the window when staged)",
         )
     if normalised in _TRUTHY:
         kind, detail = _ddraw_route(exe_dir)
@@ -446,23 +451,23 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
                 "ini-window",
                 WARN,
                 f"[Disciple] InWindow={value.strip()} (the game makes its own window) "
-                f"and no cnc-ddraw staged: {_WINDOWED_CRASH_NOTE} -- set InWindow=0 in "
-                "Exe/DISCIPLE.INI for the fullscreen baseline, or install cnc-ddraw for "
-                "a window (docs/wrapper.md)",
+                f"and no cnc-ddraw staged: {_WINDOWED_NEEDS_WRAPPER} -- stage "
+                "cnc-ddraw next to Disciple.exe for a window, or set InWindow=0 in "
+                "Exe/DISCIPLE.INI to run the game fullscreen",
             )
         return Check(
             "ini-window",
-            WARN,
-            f"[Disciple] InWindow={value.strip()} (the game makes its own window): a "
-            f"native ddraw route is in effect ({detail}) but the wrapper expects the "
-            "game fullscreen, and a game that is itself windowed fights it -- set "
-            "InWindow=0 in Exe/DISCIPLE.INI and let cnc-ddraw present the window",
+            PASS,
+            f"[Disciple] InWindow={value.strip()} with cnc-ddraw staged ({detail}); "
+            "windowed presentation is provided by the wrapper, which does not need "
+            "the game's own window mode",
         )
     return Check(
         "ini-window",
         WARN,
-        f"[Disciple] InWindow={value.strip()!r} is neither 0 nor 1; set InWindow=0 in "
-        "Exe/DISCIPLE.INI for the fullscreen baseline",
+        f"[Disciple] InWindow={value.strip()!r} is neither 0 nor 1; use 0 in "
+        "Exe/DISCIPLE.INI to run the game fullscreen and let cnc-ddraw present the "
+        "window",
     )
 
 

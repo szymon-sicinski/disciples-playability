@@ -101,15 +101,21 @@ the one-line install command is not wired yet — copy `ddraw.dll` and
 `ddraw.ini` from the pinned `v7.1.0.0` release into `Exe/` (it is **not**
 committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
-> **Do not reach for the game's own window mode.** `InWindow=1` in
-> `Exe/DISCIPLE.INI` is a **known crash at start-up on plain Wine**: the first
-> real run of v0.1.0 (2026-11-21) died with `C0000005` in display
-> initialisation, before the game wrote `Disciple.log`, while the same install
-> had played with `InWindow=0`. The supported windowed path is cnc-ddraw
-> presenting a **fullscreen** game (`InWindow=0`), and v0.1 does not install
-> cnc-ddraw automatically. `doctor` reports the setting as its `ini-window`
-> line — `PASS` for `InWindow=0`, `WARN` for `InWindow=1` or a missing key —
-> and never rewrites it: that key is your display choice, not a path.
+> **Status: plain-Wine start-up crashes at `0059559E` and is unresolved.** Two
+> real runs on 2026-11-21 died with `Exception C0000005` (write to `0x00000000`)
+> after the game logged its own start — with `InWindow=1` **and** with
+> `InWindow=0`, so display mode is not the cause. Tested and failed:
+> `InWindow=0`, `InWindow=1`. Candidates not yet ruled out: staged cnc-ddraw, a
+> non-wow64 Wine, a different Windows version in the prefix, `DDraw=0`. No recipe
+> in [`docs/wine-recipe.md`](docs/wine-recipe.md) is a fix yet; the analysis is its
+> ["Known crash at start-up"](docs/wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-affects-every-recipe)
+> section.
+>
+> `doctor` reports `[Disciple] InWindow` as its `ini-window` line — `PASS` for
+> `0`, `WARN` for `1` with no cnc-ddraw staged, `WARN` for a missing key. That
+> line is a **configuration guard** ("windowed presentation needs cnc-ddraw; the
+> launcher does not write this key"), not a crash fix, and the launcher never
+> rewrites the key: it is your display choice, not a path.
 
 ## Documentation
 
@@ -128,7 +134,7 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
 **Verified here** (commands in [`docs/verification.md`](docs/verification.md#what-the-agents-did-verify-for-contrast)):
 
-- 223 synthetic-fixture tests pass; 2 read-only tests pass against a retail
+- 224 synthetic-fixture tests pass; 2 read-only tests pass against a retail
   install; `ruff check` and `ruff format --check` are clean.
 - CI: pytest + ruff on ubuntu-latest and windows-latest, Python 3.10, 3.11,
   3.12, 3.13, plus a `disciples-play --help` smoke test per cell.

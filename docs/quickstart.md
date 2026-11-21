@@ -51,15 +51,21 @@ Today the pack contains the pinned fetch and preset as the
 wired yet**: copy `ddraw.dll` and `ddraw.ini` from the pinned `v7.1.0.0`
 release into the game's `Exe/` folder next to `Disciple.exe` (recipe:
 [`wine-recipe.md`](wine-recipe.md) §1d), keep the game itself fullscreen
-(`InWindow=0` — do **not** use the game's own window mode: `InWindow=1` on plain
-Wine is a known crash at start-up, not a window, and `doctor`'s `ini-window`
-line flags it), and run the launcher — it sets `WINEDLLOVERRIDES=ddraw=n,b`
+(`InWindow=0` — windowed presentation comes from cnc-ddraw, not from the game's
+own window mode, so `doctor` warns when `InWindow=1` has no wrapper staged), and
+run the launcher — it sets `WINEDLLOVERRIDES=ddraw=n,b`
 automatically once it finds the DLL. [`wrapper.md`](wrapper.md) documents the
 preset and the digest pin.
 
+> **Known: the game dies at start-up under plain Wine.** `Exception C0000005` at
+> `0059559E`, the same with `InWindow=0` and `InWindow=1`; see
+> [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-affects-every-recipe)
+> for the evidence and the untested candidates. This is unresolved in v0.1.0.
+
 ## If something does not work
 
-- The window is black or the game does not start → [`wine-recipe.md`](wine-recipe.md) "If the screen is black".
+- The window is black or never appears → [`wine-recipe.md`](wine-recipe.md) "If the screen is black".
+- The game dies at start-up with `C0000005` at `0059559E` → known and **unresolved**; [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-affects-every-recipe) lists what was tested and what was not.
 - A `FAIL` from `doctor` names its own fix on the same line.
 - `disciples-play data --game-dir …` prints a read-only structural report of the
   data files (documented in [`data-layout.md`](data-layout.md)).

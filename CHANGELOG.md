@@ -7,13 +7,13 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Unreleased until human verification — v0.1.0
 
 The code, the docs and the test suite are complete for v0.1.0. The tag is
-**deliberately not pushed**: the first real in-game run (2026-11-21) reached the
-game's start-up and crashed with the game's own windowed mode (`InWindow=1` in
-`Exe/DISCIPLE.INI`), which is now a `doctor` WARN, and it has not yet been
-repeated with the documented configuration (`InWindow=0` + cnc-ddraw). Every
-claim that the pack makes the game playable is therefore still a human check
-listed in [`docs/verification.md`](docs/verification.md) and marked
-**UNVERIFIED**. Tag and release only after those eleven items are ticked.
+**deliberately not pushed**: the first real in-game runs (2026-11-21) reached the
+game's start-up and died there — `Exception C0000005` at `0059559E`, identically
+with `[Disciple] InWindow=1` and `InWindow=0`, so the cause is **unresolved** and
+is not display mode. Every claim that the pack makes the game playable is
+therefore still a human check listed in
+[`docs/verification.md`](docs/verification.md) and marked **UNVERIFIED**. Tag and
+release only after those eleven items are ticked.
 
 ### Added
 
@@ -29,6 +29,11 @@ listed in [`docs/verification.md`](docs/verification.md) and marked
   writability, installation paths, wine, `ddraw` override, wrapper, `InWindow`,
   music, video, display) with a fix hint per line and a stable `--json` schema.
   It is read-only, never prints a game hash, and never rewrites the display key.
+- **`ini-window` guard** — `doctor` warns when `[Disciple] InWindow=1` asks the
+  game for its own window with no cnc-ddraw staged ("windowed presentation needs
+  cnc-ddraw; the launcher does not write this key"), passes on `InWindow=0`, and
+  warns when the key is absent (retail default unknown). Configuration only: the
+  start-up crash at `0059559E` also happens with `InWindow=0`.
 - **`data` subcommand** — read-only structural report of the installation:
   directory inventory, dBase III geometry with closing header arithmetic, `MQDB`
   chunk offsets/sizes with competing hypotheses scored, ID cross-reference
@@ -67,20 +72,17 @@ listed in [`docs/verification.md`](docs/verification.md) and marked
   `data` are registered under one subparser group.
 - `doctor` evaluates each installation path instead of only counting keys, so a
   relative or stale value is a FAIL naming the key.
-- `doctor` gains an `ini-window` check for `[Disciple] InWindow`: `InWindow=0`
-  PASSes, `InWindow=1` WARNs — windowed mode without cnc-ddraw is the
-  configuration that crashed at start-up on stock Wine — and a missing key WARNs
-  because the retail default is unknown. The launcher still never writes the key.
 
 ### Verified
 
-- 223 synthetic-fixture tests pass; 2 read-only tests pass against a retail
+- 224 synthetic-fixture tests pass; 2 read-only tests pass against a retail
   installation; `ruff check` and `ruff format --check` are clean.
 - `disciples-play data` runs read-only over a retail install: 314 files, 131
   dBase III tables (header arithmetic closes on all), 19 `MQDB` containers.
-- `disciples-play doctor` runs read-only over the retail install and WARNs
-  `ini-window` on its real `InWindow=1` (the setting the first in-game run
-  crashed with).
+- `disciples-play doctor` runs read-only over the retail install, and its
+  `ini-window` line follows that copy's own state: `WARN` while no cnc-ddraw was
+  staged next to `Disciple.exe`, `PASS` once one was. A configuration guard in
+  both directions — it is not a crash fix.
 - No game-derived file is tracked; the game folder is outside every git tree.
 
 ### Not verified
@@ -91,8 +93,9 @@ listed in [`docs/verification.md`](docs/verification.md) and marked
   [`docs/verification.md`](docs/verification.md).
 - Windows as a supported target (CI green is not a play test).
 - A one-line wrapper install: the functions exist, the CLI subcommand does not.
-- That `InWindow=0` plus cnc-ddraw gets the game past start-up: the crashed
-  install has not been re-run with it, and only the user's own run can say.
+- That `InWindow=0` plus cnc-ddraw gets the game past start-up: it does not, as
+  far as anyone here can tell — the crash happens with either `InWindow` value
+  and its cause is unresolved.
 - The `MQDB`/`.wdb` semantics still marked **H** in
   [`docs/data-layout.md`](docs/data-layout.md#open-questions).
 
