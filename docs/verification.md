@@ -28,10 +28,10 @@ you will record a windowing failure that is a setting, not a defect.
 `doctor` reports the key as its **`ini-window`** line: `PASS` for
 `InWindow=0`, `WARN` for `InWindow=1` (with or without cnc-ddraw — the wrapper
 expects a fullscreen game either way) and `WARN` for a missing key. That WARN is
-not a ticked box, and it is not a substitute for these items; it names the same
-consequence from the run that produced this file. `InWindow=1` with no cnc-ddraw
-is the configuration that crashed at start-up on stock Wine in the first real run
-of v0.1.0 (2026-11-21, `main` `e7fe136f`: `Exception C0000005`, before
+neither a ticked box nor a substitute for these items: it records the single
+observation behind this file (2026-11-21), not a play test. `InWindow=1` with no
+cnc-ddraw is the configuration that crashed at start-up on stock Wine in that
+first real run of v0.1.0 (`main` `e7fe136f`: `Exception C0000005`, before
 `Disciple.log` was written), so treat a start-up crash in items 1–2 as this
 setting until the line reads `InWindow=0`.
 
