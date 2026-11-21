@@ -9,7 +9,8 @@ synthetic fixtures (216 tests) plus a read-only pass over the retail install
 
 **Partial result (maintainer, 2026-11-21):** the main menu **was** reached and
 the game played under **Heroic + Proton-GE** — but by pressing Play in Heroic
-with the pack's rewritten INI, not through `disciples-play --game-dir`.
+with the install's **original `X:\…` INI**, not through `disciples-play --game-dir`,
+and not (yet) with the pack's rewritten `Z:\…` values.
 Item 1 stays unticked for that reason. Plain `wine` crashes at start-up for
 this title (`0059559E`, null pointer in the graphics layer); the supported
 sequence is in [`wine-recipe.md`](wine-recipe.md) "Start here".
@@ -39,7 +40,7 @@ not a defect.
 
 - [ ] **UNVERIFIED** — **1. Main menu.** `Disciple.exe` reaches the main menu: no black screen, no error dialog.
   Command: `disciples-play --game-dir "$GAME"`. Record: what appeared, and the last 20 lines of terminal output if it did not.
-  Note (2026-11-21): the menu **was** reached, but by pressing Play in **Heroic + Proton-GE** with the rewritten INI — not by the command above. Under plain `wine` that command crashes at `0059559E` (`C0000005`, null pointer in the graphics layer), with or without the wrapper staged; see [`wine-recipe.md`](wine-recipe.md) "Start here". The box stays unticked until the pack's own command is what reaches the menu on some Wine build or prefix.
+  Note (2026-11-21): the menu **was** reached, but by pressing Play in **Heroic + Proton-GE** with the install's original `X:\…` INI — not by the command above, and not with the pack's rewritten values (that run has not happened yet). Under plain `wine` that command crashes at `0059559E` (`C0000005`, null pointer in the graphics layer), with or without the wrapper staged; see [`wine-recipe.md`](wine-recipe.md) "Start here". The box stays unticked until the pack's own command is what reaches the menu on some Wine build or prefix.
 - [ ] **UNVERIFIED** — **2. Window size.** The wrapper presents the game in a **640×480** window (the pack's base size, not a recorded video mode) and you resize it; record the size you settled on (1920×1440 = exactly 3×, 1280×960 = 2×) and whether the pixels stayed sharp.
   Note: the preset sets no window-size, `boxing` or `shader` key — it writes nine `[ddraw]` keys (`windowed`, `maintas`, `maxfps`, `vsync`, `adjmouse`, `savesettings`, `nonexclusive`, `hook`, `renderer`) and nothing else. Sharp integer scaling needs `boxing=true` or `shader=Nearest neighbor` added to `ddraw.ini` by hand (see [`wrapper.md`](wrapper.md)); record which one you used, because neither is the default.
 - [ ] **UNVERIFIED** — **3. Alt+Enter and Alt+Tab.** Alt+Enter toggles windowed/fullscreen; Alt+Tab away and back does not corrupt the display.
