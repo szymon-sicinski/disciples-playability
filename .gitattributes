@@ -1,0 +1,3 @@
+# The game's INI files use CRLF line endings. Pin the test fixtures so a
+# checkout is byte-identical on Linux and Windows regardless of core.autocrlf.
+*.ini text eol=crlf
