@@ -23,7 +23,7 @@ environment is the problem, not your INI.** Measured by the maintainer on
 | plain `wine`, no wrapper, `InWindow=0` / `InWindow=1` | same crash at `0059559E` |
 | plain `wine`, `DDraw=0` (GDI fallback) | starts, sound, **black screen** |
 | Heroic + Proton-GE, its own prefix, the original `X:\…` INI | **plays** ✅ |
-| Heroic + Proton-GE, its own prefix, **the pack's rewritten INI (21 keys → `Z:\…`)** | **plays** ✅ (re-run 2026-11-21 after the rewrite was put in place and the correct `Disciple.exe` confirmed) |
+| Heroic + Proton-GE, its own prefix, **the pack's rewritten INI (21 keys → `Z:\…`)** | **plays** ✅ (re-run 2026-11-21 with the rewrite in place; the install holds a single, unmodified `Exe/Disciple.exe`, the same path the crash dumps name) |
 
 The crash is `mov ecx,[eax] ; call [ecx+0x58]` with `EAX=0` — a null object
 handed back by the graphics layer, i.e. Wine's own `ddraw` never returns a
@@ -48,8 +48,8 @@ the Proton runner is. What the rewrite buys is *portability*: a folder you move
 still finds its data. §3 records both runs, including the earlier one that was
 mis-recorded as using the rewrite when it was not.
 
-**cnc-ddraw was not in the picture in any of those runs.** Module dumps from
-every attempt (failing and working) list `C:\windows\system32\ddraw.dll` and
+**cnc-ddraw was not in the picture in any of those runs.** Every plain-Wine
+crash dump lists `C:\windows\system32\ddraw.dll` and
 `wined3d.dll`; the `ddraw.dll` staged in `Exe\` was never loaded. That does not
 prove the wrapper is useless — it proves none of the results above depend on
 it. Do not credit it with the working run.
@@ -189,10 +189,13 @@ Bottles wraps the same Wine prefix in a GUI. The parts that matter are the
 > credits cnc-ddraw with it.
 >
 > One correction worth keeping visible: an earlier run was recorded as using the
-> rewritten INI when the file in place still held the original `X:\…` values.
-> The rewrite was re-tested deliberately afterwards, with the correct executable
-> confirmed, and plays — so the portability claim now rests on a real run rather
-> than on a file-copy assumption.
+> rewritten INI when the file in place still held the original `X:\…` values
+> (`DISCIPLE.ini.rewritten` turned out to contain `X:\Games\Heroic\…`). The
+> rewrite was re-tested deliberately afterwards and plays — so this claim rests
+> on a real run rather than on a file-copy assumption. **What that run shows is
+> that the game boots with the rewritten values where the pack wrote them**; that
+> a *moved* folder still finds its data is item 8 of the checklist and is
+> still unticked.
 
 The existing prefix named in `Exe\Disciple.log` (`X:\Games\Heroic\…`) came from
 a Heroic install, so this is the path that reproduces what the maintainer

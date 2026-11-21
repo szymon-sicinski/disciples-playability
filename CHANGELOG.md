@@ -110,8 +110,8 @@ those eleven items are ticked.
   binary (`--wine` overrides it) and has no `STEAM_COMPAT_*` path, so the
   supported sequence is `disciples-play --no-launch --game-dir …` and then
   **Play** in Heroic or Lutris ([`docs/wine-recipe.md`](docs/wine-recipe.md#start-here-plain-wine-crashes-at-start-up--use-a-proton-runner)).
-- **cnc-ddraw was never loaded in those runs.** Module dumps name
-  `C:\windows\system32\ddraw.dll` and `wined3d.dll` in every attempt, failing
+- **cnc-ddraw was never loaded in those runs.** Every plain-Wine crash dump names
+  `C:\windows\system32\ddraw.dll` and `wined3d.dll`, and
   and working; the `ddraw.dll` staged in `Exe\` never appears, so nothing here
   credits the wrapper with the working launch.
 

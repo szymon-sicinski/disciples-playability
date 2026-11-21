@@ -8,16 +8,16 @@ This repository ships **no game data and never will**: no `Disciple.exe`, no
 `.DBF`/`.dbi` tables, no art, audio, video or save files. It is software that
 operates on an installation **you already own**.
 
-> **Status: v0.1.0 release candidate — not yet verified in game.** The INI
-> rewriter, the launcher, the cnc-ddraw preset and pinned fetch, the `doctor`
-> subcommand, the Wine recipes and the read-only `data` scanner are
-> implemented and tested on synthetic fixtures, and the scanner was run
-> read-only against a retail install. No agent here has a display or Wine, so
-> every "it plays" claim is a human check:
-> [`docs/verification.md`](docs/verification.md), all eleven items
-> **UNVERIFIED**. (Partial, 2026-11-21: the maintainer's Heroic + Proton-GE run
-> reached the main menu; the item stays unticked because it specifies the
-> pack's own command.)
+> **Status: v0.1.0 release candidate.** The INI rewriter, the launcher, the
+> cnc-ddraw preset and pinned fetch, the `doctor` subcommand, the Wine recipes
+> and the read-only `data` scanner are implemented and tested on synthetic
+> fixtures. The maintainer's in-game runs (2026-11-21) reached the main menu
+> under **Heroic + Proton-GE**, with the install's original `X:\…` INI and with
+> the pack's **rewritten `Z:\…`** INI — see *What it fixes* below.
+> **What has not worked is the pack's own launch:** `disciples-play --game-dir …`
+> crashes at `0059559E` under plain `wine`. The other ten items in
+> [`docs/verification.md`](docs/verification.md) remain **UNVERIFIED**, and the
+> launch item stays unticked because it specifies the pack's command.
 
 ## What the pack is
 
@@ -131,7 +131,7 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 | [`docs/wine-recipe.md`](docs/wine-recipe.md) | Reproducible prefixes: plain `wine`, Bottles, Heroic/Proton |
 | [`docs/wrapper.md`](docs/wrapper.md) | The cnc-ddraw preset, why `hook=4`, the pinned fetch, the `ddraw=n,b` override, black-screen triage |
 | [`docs/data-layout.md`](docs/data-layout.md) | dBase III tables and `MQDB` containers, every claim graded **D**/**H**/**V**, open questions with falsifiers |
-| [`docs/verification.md`](docs/verification.md) | The eleven human checks that gate the tag — all **UNVERIFIED** |
+| [`docs/verification.md`](docs/verification.md) | The eleven human checks that gate the tag — ten still **UNVERIFIED**, the launch one blocked on plain Wine |
 | [`docs/plans/00-playability-plan.md`](docs/plans/00-playability-plan.md) | The spec: measured facts, scope, card graph, budget, risks |
 | [`THIRD_PARTY.md`](THIRD_PARTY.md) | Every component, its measured licence, and what may be shipped |
 
@@ -152,10 +152,11 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
 **Not verified — and this list is the honest boundary:**
 
-- The game reaching its main menu, the 3× window, Alt+Enter/Alt+Tab, mouse
-  targeting, palette animation, music without the CD, save/load, moving the
-  install, `Config.exe` behaviour, a second prefix: all eleven items in
-  [`docs/verification.md`](docs/verification.md) are **UNVERIFIED**.
+- The pack's own launch reaching the menu, the 3× window, Alt+Enter/Alt+Tab,
+  mouse targeting, palette animation, music without the CD, save/load, moving
+  the install, `Config.exe` behaviour, a second prefix: those ten items in
+  [`docs/verification.md`](docs/verification.md) are **UNVERIFIED**. The menu
+  *was* reached — through Heroic, not through this pack's launcher.
 - Plain Wine as a launch environment for this title: it crashes at `0059559E`
   (maintainer, 2026-11-21, with or without the wrapper staged). The launch
   that did play was a **Proton** runner.
