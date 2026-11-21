@@ -33,10 +33,10 @@ The checks, in output order:
 ``ddraw-override`` a ``ddraw`` override routes ``ddraw`` to native (env or wrapper)
 ``wrapper``      cnc-ddraw staged with a marker matching the DLL's digest
 ``ini-window``   ``[Disciple] InWindow`` -- the game's own display mode. ``0`` is
-                 the fullscreen baseline; ``1`` without a staged cnc-ddraw is an
-                 unsupported way to ask for a window, because windowed
-                 presentation comes from the wrapper. The doctor never writes the
-                 key (it is the user's choice)
+                 the fullscreen baseline; ``1`` always WARNs, because cnc-ddraw
+                 needs the game itself fullscreen. The wording follows the
+                 ``wrapper`` line's verdict. The doctor never writes the key (it
+                 is the user's choice)
 ``music``        25 ``.wav`` files in ``Music/``
 ``video``        41 ``.smk`` cutscenes (6 ``Video/`` + 35 ``Briefing/``)
 ``display``      an X display is available to verify windowing
@@ -434,8 +434,8 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
             WARN,
             "DISCIPLE.INI has no [Disciple] InWindow key (the retail default is "
             f"unknown); {_WINDOWED_NEEDS_WRAPPER} -- set InWindow=0 in "
-            "Exe/DISCIPLE.INI to run the game fullscreen, or stage cnc-ddraw for "
-            "a window (docs/wrapper.md)",
+            "Exe/DISCIPLE.INI to run the game fullscreen, and stage cnc-ddraw "
+            "next to Disciple.exe when you want a window (docs/wrapper.md)",
         )
 
     normalised = value.strip().lower()
@@ -462,9 +462,9 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
             "ini-window",
             WARN,
             f"[Disciple] InWindow={value.strip()} (the game makes its own window) "
-            f"and no verified cnc-ddraw: {_WINDOWED_NEEDS_WRAPPER} -- stage "
-            "cnc-ddraw next to Disciple.exe, or set InWindow=0 in "
-            "Exe/DISCIPLE.INI to run the game fullscreen",
+            f"and no verified cnc-ddraw: {_WINDOWED_NEEDS_WRAPPER} -- set "
+            "InWindow=0 in Exe/DISCIPLE.INI to run the game fullscreen, and stage "
+            "cnc-ddraw next to Disciple.exe when you want a window",
         )
     return Check(
         "ini-window",

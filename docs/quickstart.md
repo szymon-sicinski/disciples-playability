@@ -52,7 +52,8 @@ wired yet**: copy `ddraw.dll` and `ddraw.ini` from the pinned `v7.1.0.0`
 release into the game's `Exe/` folder next to `Disciple.exe` (recipe:
 [`wine-recipe.md`](wine-recipe.md) §1d), keep the game itself fullscreen
 (`InWindow=0` — windowed presentation comes from cnc-ddraw, not from the game's
-own window mode, so `doctor` warns when `InWindow=1` has no wrapper staged), and
+own window mode, so `doctor` warns on `InWindow=1` in every case, a wrapper
+staged or not), and
 run the launcher — it sets `WINEDLLOVERRIDES=ddraw=n,b`
 automatically once it finds the DLL. [`wrapper.md`](wrapper.md) documents the
 preset and the digest pin.
