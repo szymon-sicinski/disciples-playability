@@ -5,7 +5,9 @@ A clean machine with Python ≥ 3.10 and Wine installed is enough. The pack has
 
 ```bash
 # 1. install (from a clone of this repository)
-pipx install .            # if pipx is missing: python3 -m pip install --user pipx && ~/.local/bin/pipx ensurepath
+pipx install .            # if pipx is missing (Debian/Ubuntu: sudo apt install pipx; else
+                          #   python3 -m pip install --user pipx && ~/.local/bin/pipx ensurepath,
+                          #   then open a NEW shell so PATH picks it up)
                           # any other installer works too, e.g. python3 -m pip install --user .
 # 2. check the install, the Wine side and the data files — one line per check
 disciples-play doctor --game-dir "$HOME/Games/Disciples Gold"

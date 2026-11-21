@@ -26,7 +26,7 @@ among its supported games. What is missing, and what this pack adds:
 
 | # | Problem | What the pack does |
 |---|---|---|
-| 1 | `Exe\DISCIPLE.INI` hardcodes 21 absolute `X:\…` paths; move the folder and the game cannot find its data | Rewrites `[Installation]` / `[InstallationClient]` to the real install on every start, with a one-time `DISCIPLE.INI.orig` backup; a second run is a byte-wise no-op |
+| 1 | `Exe\DISCIPLE.INI` hardcodes 21 absolute `X:\…` paths; move the folder and the game cannot find its data | Rewrites `[Installation]` / `[InstallationClient]` to the real install on every start, with a one-time `<name>.orig` backup; a second run is a byte-wise no-op |
 | 2 | cnc-ddraw is a zip you unpack and configure by hand per install | A curated `ddraw.ini` preset and a pinned (tag + size + SHA-256) fetch, shipped as a module; the one-line install command is **not wired yet** |
 | 3 | The Wine prefix is hand-made, so a second machine is a second adventure | A `doctor` subcommand with nine checkable lines, plus copy-paste prefix recipes (plain `wine`, Bottles, Heroic/Proton) |
 | 4 | The data layer (131 dBase III tables, 19 `MQDB` containers) is undocumented | A fact-graded data-layout document and a read-only `data` subcommand |
@@ -81,9 +81,9 @@ Requires Python ≥ 3.10, `pipx` (or any Python installer) and Wine to play. No
 runtime dependencies.
 
 ```bash
-pipx install .            # from a clone; needs pipx itself:
-                          #   python3 -m pip install --user pipx && ~/.local/bin/pipx ensurepath
-                          # or: python3 -m pip install --user .
+pipx install .            # from a clone; needs pipx itself (Debian/Ubuntu: sudo apt install pipx;
+                          #   else python3 -m pip install --user pipx && ~/.local/bin/pipx ensurepath,
+                          #   then open a NEW shell). Or: python3 -m pip install --user .
 disciples-play doctor --game-dir "$HOME/Games/Disciples Gold"
 disciples-play --game-dir "$HOME/Games/Disciples Gold"
 ```
@@ -144,8 +144,9 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 ## Third-party components
 
 See [`THIRD_PARTY.md`](THIRD_PARTY.md). In short: `cnc-ddraw` (MIT) is the one
-code dependency and is **fetched at install time**, pinned by tag, size and
-SHA-256, never vendored. DisciplesGL and the Disciples HD mod are cited as prior
+code dependency; v0.1 ships the preset and the **pinned, digest-verified fetch as
+`disciples_play.wrapper`, but nothing calls it yet** — the DLL is copied in by hand
+from the pinned tag (see [`docs/wrapper.md`](docs/wrapper.md)) and is never vendored. DisciplesGL and the Disciples HD mod are cited as prior
 art **only** — DisciplesGL has no licence file, so no code from it is used or
 bundled. The game itself is never redistributed.
 

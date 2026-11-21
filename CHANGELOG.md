@@ -17,7 +17,7 @@ Tag and release only after those eleven items are ticked.
 - **Path-portable launcher** — `disciples-play --game-dir DIR` resolves the
   install (including a nested retail drop and `DISCIPLE.ini` case variants),
   rewrites the 21 absolute `[Installation]`/`[InstallationClient]` values on
-  every start, keeps a one-time `DISCIPLE.INI.orig`, and launches
+  every start, keeps a one-time `<ini name>.orig` (`DISCIPLE.ini.orig` on a lowercase install), and launches
   `wine Exe/Disciple.exe` with the working directory set to `Exe`.
   `--dry-run` prints the diff, command and cwd without writing; `--print-command`
   prints the command alone; `--path-style`, `--ini-mode`, `--wine`, `--no-launch`

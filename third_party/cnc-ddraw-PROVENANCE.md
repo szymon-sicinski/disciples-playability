@@ -22,9 +22,10 @@ card that introduced it. It is the value pinned as `CNC_DDRAW_SHA256` in
 
 ## What ships and what does not
 
-- **Fetched, never vendored.** The release zip (and therefore `ddraw.dll`) is
-  downloaded at install time and verified against the digest above; it is not
-  committed to this repository.
+- **Never vendored.** The release zip (and therefore `ddraw.dll`) is not
+  committed to this repository. `disciples_play.wrapper.fetch_wrapper()` can
+  download it from the pinned tag and verifies the digest above, but **no CLI
+  command invokes it in v0.1** — the file is copied into `Exe/` by hand.
 - **Licence shipped.** `cnc-ddraw-LICENSE.txt` (verbatim upstream `LICENSE`) is
   committed so the MIT notice travels with the fetch code.
 - **Update procedure.** To move to a new release: bump `CNC_DDRAW_TAG` and

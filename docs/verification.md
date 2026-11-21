@@ -19,14 +19,20 @@ export GAME="$HOME/Development/RetroLab/Game files/Disciples Gold"   # your path
 disciples-play doctor --game-dir "$GAME"
 ```
 
+**Items 2–5 precondition:** the wrapper only presents a window when the *game*
+is fullscreen, i.e. `InWindow=0` in `Exe/DISCIPLE.ini`. The launcher never writes
+that key and a retail install may ship `InWindow=1`, so check it before running
+items 2–5 — otherwise you will record a windowing failure that is a setting,
+not a defect.
+
 ---
 
 ## The eleven checks
 
 - [ ] **UNVERIFIED** — **1. Main menu.** `Disciple.exe` reaches the main menu: no black screen, no error dialog.
   Command: `disciples-play --game-dir "$GAME"`. Record: what appeared, and the last 20 lines of terminal output if it did not.
-- [ ] **UNVERIFIED** — **2. Window size.** The window opens at the game's native **640×480** and you resize it; record the size you settled on (1920×1440 = exactly 3×, 1280×960 = 2×) and whether the pixels stayed sharp.
-  Note: the preset does **not** set a window size, `boxing` or `shader` — it ships `windowed=1` + `maintas=1` and nothing else. Sharp integer scaling needs `boxing=true` or `shader=Nearest neighbor` added to `ddraw.ini` by hand (see [`wrapper.md`](wrapper.md)); record which one you used, because neither is the default.
+- [ ] **UNVERIFIED** — **2. Window size.** The wrapper presents the game in a **640×480** window (the pack's base size, not a recorded video mode) and you resize it; record the size you settled on (1920×1440 = exactly 3×, 1280×960 = 2×) and whether the pixels stayed sharp.
+  Note: the preset sets no window-size, `boxing` or `shader` key — it writes nine `[ddraw]` keys (`windowed`, `maintas`, `maxfps`, `vsync`, `adjmouse`, `savesettings`, `nonexclusive`, `hook`, `renderer`) and nothing else. Sharp integer scaling needs `boxing=true` or `shader=Nearest neighbor` added to `ddraw.ini` by hand (see [`wrapper.md`](wrapper.md)); record which one you used, because neither is the default.
 - [ ] **UNVERIFIED** — **3. Alt+Enter and Alt+Tab.** Alt+Enter toggles windowed/fullscreen; Alt+Tab away and back does not corrupt the display.
   Record: both transitions, and whether colours/size survive the round trip.
 - [ ] **UNVERIFIED** — **4. Mouse targeting at 3×.** Clicking a map tile and a menu button hits what is under the cursor at 3× scale; the cursor does not escape to the second monitor.
