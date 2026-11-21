@@ -334,10 +334,6 @@ def test_resolve_exe_dir_refuses_a_mixed_tree_naming_both_paths(tmp_path: Path) 
     root, exe_dir = install_tree(tmp_path)
     (root / "Disciple.exe").write_bytes(b"MZ")
     (exe_dir / "DISCIPLE.INI").write_text("[Installation]\n", encoding="cp1252")
-    with pytest.raises(wrapper.WrapperInstallError) as exc:
-        wrapper.resolve_exe_dir(root)
-    assert str(root / "Disciple.exe") in str(exc.value)
-    assert str(exe_dir / "Disciple.exe") in str(exc.value)
 
     def snapshot() -> list[tuple[str, int]]:
         return sorted(
@@ -346,10 +342,16 @@ def test_resolve_exe_dir_refuses_a_mixed_tree_naming_both_paths(tmp_path: Path) 
             if p.is_file()
         )
 
+    # the snapshot covers both calls: resolve_exe_dir must not write either
     before = snapshot()
+    with pytest.raises(wrapper.WrapperInstallError) as exc:
+        wrapper.resolve_exe_dir(root)
+    assert str(root / "Disciple.exe") in str(exc.value)
+    assert str(exe_dir / "Disciple.exe") in str(exc.value)
     with pytest.raises(wrapper.WrapperInstallError, match="ambiguous"):
         wrapper.install_wrapper(root, staging)
-    # nothing at all was written -- not just no ddraw.dll: no ddraw.ini, no marker
+    # nothing at all was written, by either call -- not just no ddraw.dll:
+    # no ddraw.ini, no marker
     assert snapshot() == before
     # naming the intended directory exactly still works, and the launcher finds it
     wrapper.install_wrapper(exe_dir, staging)
