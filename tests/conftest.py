@@ -9,6 +9,11 @@ by the launcher tests. CI runs on an exec-allowed ``/tmp``, but the
 maintainer's sandbox mounts ``/tmp`` ``noexec``; a script the tests must exec
 cannot live there, so the root is probed and a repo-local fallback is used
 when ``/tmp`` refuses execution.
+
+Every test also runs with the developer's environment detached from the
+launcher's install lookup (see ``isolated_user_environment`` below): the suite
+must stay green when it is run against a real install, because that is how the
+wrapper is verified against retail data.
 """
 
 import shutil
@@ -22,6 +27,30 @@ import pytest
 SRC = Path(__file__).resolve().parent.parent / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+
+
+@pytest.fixture(autouse=True)
+def isolated_user_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Detach the launcher's install lookup from the machine running the tests.
+
+    Resolution order is ``--game-dir`` -> ``$DISCIPLES_GAME_DIR`` -> ``game_dir``
+    in the per-user config file (``cli.config_path``). A developer who exports a
+    real install -- which is exactly how the wrapper is checked against retail
+    data -- would otherwise have that install leak into tests that expect their
+    own synthetic tree, or expect no install at all. Drop the variable and point
+    every notion of a home/config directory at a throwaway tree, on both
+    platforms, so nothing can read the developer's ``config.ini`` either.
+
+    A test that wants an env var or a config file sets one itself; that is then
+    the only thing in play.
+    """
+    monkeypatch.delenv("DISCIPLES_GAME_DIR", raising=False)
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))  # POSIX ``Path.home()``
+    monkeypatch.setenv("USERPROFILE", str(home))  # Windows ``Path.home()``
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
+    monkeypatch.setenv("APPDATA", str(home / "AppData" / "Roaming"))
 
 
 def _exec_allowed_scratch() -> Path:
