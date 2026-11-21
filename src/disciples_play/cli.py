@@ -5,6 +5,8 @@ contract, documented here and in ``docs/cli.md``:
 
 * ``0`` -- success (also ``--help``/``--version``, ``--dry-run``,
   ``--print-command``, ``--no-launch``)
+* ``1`` -- ``data``: at least one file could not be parsed (the report still
+  prints, with per-file ``error`` entries)
 * ``2`` -- bad command line, or a bad/missing install
 * ``3`` -- rewrite refused (INI not writable, copy-tree target exists)
 * ``4`` -- wine not found (launch only)
@@ -35,6 +37,7 @@ EXIT_OK = 0
 EXIT_USAGE_OR_INSTALL = 2
 EXIT_REWRITE_REFUSED = 3
 EXIT_WINE_MISSING = 4
+EXIT_DATA_INCOMPLETE = 1  # `data`: at least one file could not be parsed
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -56,8 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
             "under Wine. Requires the game files you already own."
         ),
         epilog=(
-            "exit codes: 0 success; 2 bad/missing install; 3 rewrite refused; "
-            "4 wine not found. See docs/cli.md."
+            "exit codes: 0 success; 1 data parse errors; 2 bad/missing install; "
+            "3 rewrite refused; 4 wine not found. See docs/cli.md."
         ),
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -114,8 +117,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="suppress the rewrite summary line",
     )
 
-    sub = parser.add_subparsers(dest="command", metavar="COMMAND")
-    doctor_parser = sub.add_parser(
+    subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
+    data_parser = subparsers.add_parser(
+        "data",
+        help="print a read-only structural report of the game's data files",
+        description="Read-only structural report of the game's data files.",
+    )
+    data_parser.add_argument(
+        "--game-dir",
+        metavar="DIR",
+        default=argparse.SUPPRESS,
+        help=(
+            "the install directory, or a parent of it (defaults to "
+            "$DISCIPLES_GAME_DIR, then the config file)"
+        ),
+    )
+    data_parser.add_argument(
+        "--json", action="store_true", help="emit the report as JSON instead of text"
+    )
+    doctor_parser = subparsers.add_parser(
         "doctor",
         help="check this machine and install, one PASS/FAIL/WARN line per check",
         description=(
@@ -257,6 +277,57 @@ def _configure_logging(verbose: bool, quiet: bool) -> None:
     logging.getLogger().setLevel(level)
 
 
+def _data_main(ns: argparse.Namespace) -> int:
+    """``disciples-play data`` -- the read-only structural report (M5).
+
+    Resolves the install the same way the launcher does (``--game-dir``, then
+    ``$DISCIPLES_GAME_DIR``, then the config file, then the parent-directory
+    search in :func:`launch.resolve_install`), so the two subcommands agree on
+    what ``--game-dir`` means and a parent directory resolves to the same root.
+    """
+
+    from .data import build_report, render_text, report_error_count
+
+    try:
+        game_dir = resolve_game_dir(ns)
+        install = launch.resolve_install(Path(game_dir))
+        report = build_report(install.root)
+    except launch.CliError as exc:
+        print(f"disciples-play data: {exc.message}", file=sys.stderr)
+        return exc.exit_code
+    except NotADirectoryError as exc:
+        print(f"disciples-play data: {exc}", file=sys.stderr)
+        return EXIT_USAGE_OR_INSTALL
+
+    if ns.json:
+        _emit(json.dumps(report, indent=2))
+    else:
+        _emit(render_text(report))
+
+    errors = report_error_count(report)
+    if errors:
+        print(
+            f"disciples-play data: {errors} file(s) could not be parsed "
+            "(see the report's 'error' entries)",
+            file=sys.stderr,
+        )
+        return EXIT_DATA_INCOMPLETE
+    return EXIT_OK
+
+
+def _emit(text: str) -> None:
+    """Write ``text`` to stdout, tolerating an early-closed pipe (``| head``)."""
+
+    try:
+        print(text)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        try:
+            sys.stdout.close()
+        except OSError:
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     parser = build_parser()
@@ -268,7 +339,10 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit as exc:  # --help/--version exit 0; bad arguments exit 2
         return int(exc.code or EXIT_OK)
 
-    if ns.command == "doctor":
+    command = getattr(ns, "command", None)
+    if command == "data":
+        return _data_main(ns)
+    if command == "doctor":
         return run_doctor_cli(ns)
 
     _configure_logging(ns.verbose, ns.quiet)

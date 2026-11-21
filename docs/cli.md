@@ -1,15 +1,14 @@
-# `disciples-play` — launcher CLI
+# `disciples-play` — command-line interface
 
-The one command that makes a Disciples install portable and starts it:
+One command, two jobs: make a Disciples install portable and start it (the
+launcher), and print a read-only structural report of its data files
+(`disciples-play data`).
 
-```bash
-disciples-play --game-dir "/path/to/Disciples Gold"
-```
-
-It resolves the install, re-points `Exe\DISCIPLE.INI` at that install's real
-location (rewriting the 21 stale `X:\…` paths in `[Installation]` and
-`[InstallationClient]`), and launches `wine Exe/Disciple.exe`. All of it runs
-against a game folder **you already own**; this repository ships no game data.
+The launcher resolves the install, re-points `Exe\DISCIPLE.INI` at that
+install's real location (rewriting the 21 stale `X:\…` paths in `[Installation]`
+and `[InstallationClient]`), and launches `wine Exe/Disciple.exe`. All of it
+runs against a game folder **you already own**; this repository ships no game
+data.
 
 ## Usage
 
@@ -19,6 +18,7 @@ disciples-play [--game-dir DIR] [--dry-run | --print-command] [--wine PATH]
                [--ini-mode backup|inplace|copy-tree]
                [--no-launch] [-v | -q]
 disciples-play doctor [--game-dir DIR] [--json]
+disciples-play data [--game-dir DIR] [--json]
 disciples-play --version
 ```
 
@@ -148,11 +148,41 @@ launcher cannot run without it. `--game-dir` may appear before or after the
 install. `ok` in the JSON output is `true` when no check FAILs (WARNs do not
 flip it).
 
+## `data` — read-only structural report
+
+`disciples-play data` walks the install and prints a *structural* report: a
+directory inventory, per-table dBase III geometry, per-container `MQDB`
+hypothesis votes, ID cross-reference counts, and digests of the plain-text
+formats. It opens every file read-only and never decodes an image to pixels,
+never dumps palette entries, and never prints file hashes — the whole report is
+safe to publish.
+
+```
+disciples-play data [--game-dir DIR] [--json]
+```
+
+| Flag | Meaning |
+|---|---|
+| `--game-dir DIR` | The install directory, or a parent of it. Optional: defaults to `$DISCIPLES_GAME_DIR`, then the config file. |
+| `--json` | Emit the report as JSON instead of the human text rendering. |
+
+It resolves the install exactly like the launcher (§ "Where the install comes
+from" and "Install resolution"): `--game-dir`, then `$DISCIPLES_GAME_DIR`, then
+the config file, then the parent-directory search for `Exe/Disciple.exe` — a
+parent directory the launcher resolves to one install is resolved identically
+here. If at least one file cannot be parsed (a malformed `.DBF`, an unreadable
+`.DBI`, …), the report still prints with a per-file `error` entry and the
+command exits `1`.
+
+The report layout and every measured number are documented in
+`docs/data-layout.md`.
+
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | `0` | Success (also `--help`/`--version`, `--dry-run`, `--print-command`, `--no-launch`). |
+| `1` | `data` only: at least one file could not be parsed. The report still prints, with per-file `error` entries. |
 | `2` | Bad command line, or a bad/missing install — the message lists what is missing and the exact search paths tried. |
 | `3` | Rewrite refused — the INI is not writable, or the `copy-tree` target already exists / could not be copied. |
 | `4` | Wine not found (launch only). |
