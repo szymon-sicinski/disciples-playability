@@ -8,10 +8,11 @@ This repository ships **no game data and never will**: no `Disciple.exe`, no
 `.DBF`/`.dbi` tables, no art, audio, video or save files. It is software that
 operates on an installation **you already own**.
 
-> **Status: launcher implemented (M1–M2).** The INI rewriter (`disciples_play.ini`)
-> and the launcher CLI (`disciples-play --game-dir …`) are implemented and tested
-> on synthetic fixtures. The cnc-ddraw preset (M3) and the `doctor` subcommand
-> (M4) are next. No agent here can launch the game, so every "it plays" claim
+> **Status: launcher, wrapper and doctor implemented (M1–M4).** The INI
+> rewriter, the launcher CLI (`disciples-play --game-dir …`), the cnc-ddraw
+> preset + pinned fetch (M3), and the `doctor` subcommand plus the
+> reproducible Wine recipes (M4) are implemented and tested on synthetic
+> fixtures. No agent here can launch the game, so every "it plays" claim
 > remains a human check — see the plan in
 > [`docs/plans/00-playability-plan.md`](docs/plans/00-playability-plan.md).
 
@@ -62,16 +63,21 @@ pip install -e ".[dev]"
 disciples-play --help
 ```
 
-The commands that matter, implemented today (M1–M2):
+The commands that matter, implemented today (M1–M4):
 
 ```bash
 disciples-play --game-dir "/path/to/Disciples Gold" --dry-run   # show the rewrite + command
 disciples-play --game-dir "/path/to/Disciples Gold"             # fix the INI and launch
+disciples-play doctor --game-dir "/path/to/Disciples Gold"      # one PASS/FAIL/WARN line per check
 disciples-play --game-dir "/path/to/Disciples Gold" --print-command
 ```
 
-Still to come: the cnc-ddraw preset (`--install-wrapper`, M3) and `doctor`
-(M4). See [`docs/cli.md`](docs/cli.md) for the full CLI and exit-code contract.
+Still to come: the data-layout document (M5) and the v0.1 release candidate
+(M6). One gap to note: the wrapper module (`disciples_play.wrapper`) fetches
+and installs cnc-ddraw, but its one-line CLI command is not wired yet — see
+[`docs/wrapper.md`](docs/wrapper.md) for the current path. For the reproducible
+prefix, see [`docs/wine-recipe.md`](docs/wine-recipe.md); for the full CLI and
+exit-code contract, see [`docs/cli.md`](docs/cli.md).
 
 ## Repository layout
 

@@ -158,6 +158,49 @@ def test_build_env_appends_to_existing_override(
     assert env["WINEDLLOVERRIDES"] == "msvcr120=b;ddraw=n,b"
 
 
+def test_build_env_keeps_existing_native_ddraw_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("WINEDLLOVERRIDES", "ddraw=n,b")
+    root = make_install(tmp_path / "game")
+    (root / "Exe" / "ddraw.dll").write_bytes(b"MZ")
+    install = launch.resolve_install(root)
+    env = launch.build_env(install, verbose=False)
+    assert env["WINEDLLOVERRIDES"] == "ddraw=n,b"  # not duplicated
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("ddraw=n,b", True),
+        ("ddraw=n", True),
+        ("msvcr120=b;ddraw=n,b", True),
+        ("ddraw,dsound=n", True),
+        ("ddraw=b", False),
+        ("ddraw=d", False),
+        ("ddraw=", False),
+        ("notddraw=n", False),
+        ("*=n", False),
+        ("", False),
+    ],
+)
+def test_has_native_ddraw_override(value: str, expected: bool) -> None:
+    assert launch.has_native_ddraw_override(value) is expected
+
+
+def test_build_env_appends_when_ddraw_is_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # ddraw=d disables native ddraw; the launcher must still add ddraw=n,b
+    # (a bare "ddraw" substring match would wrongly leave it alone).
+    monkeypatch.setenv("WINEDLLOVERRIDES", "ddraw=d")
+    root = make_install(tmp_path / "game")
+    (root / "Exe" / "ddraw.dll").write_bytes(b"MZ")
+    install = launch.resolve_install(root)
+    env = launch.build_env(install, verbose=False)
+    assert env["WINEDLLOVERRIDES"] == "ddraw=d;ddraw=n,b"
+
+
 def test_resolve_wine_bare_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         launch.shutil, "which", lambda name: "/opt/wine/bin/wine" if name == "wine" else None
