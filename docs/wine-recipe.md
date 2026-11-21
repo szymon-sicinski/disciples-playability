@@ -63,8 +63,9 @@ Wine build, a different Windows version in the prefix (`winecfg` → Windows
 version), and the engine's own GDI path (`DDraw=0`).
 
 `doctor`'s `ini-window` line is a **configuration guard, not a crash fix**: it
-warns when `[Disciple] InWindow=1` asks the game for a window that nothing
-implements without cnc-ddraw, and passes on `InWindow=0`. Neither verdict says
+warns on every `[Disciple] InWindow=1` (cnc-ddraw needs the game fullscreen,
+so a window the game makes itself is never the supported setup), and passes only
+on `InWindow=0`. Neither verdict says
 anything about whether the game starts.
 
 Root-cause work on `0059559E` continues outside this card. Do not add a

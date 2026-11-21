@@ -79,7 +79,7 @@ _EXPECTED_MUSIC_WAVS = 25
 #: plus 35 in ``Briefing/``.
 _EXPECTED_VIDEO_SMKS = 41
 
-#: What every ``InWindow=1`` WARN without a wrapper says: windowed presentation is
+#: What the ``InWindow=1`` WARN without a verified wrapper says: windowed presentation is
 #: the wrapper's job, and the launcher deliberately does not rewrite the display
 #: key -- it is the user's choice, unlike the 21 installation paths. This is a
 #: configuration statement only: the start-up crash at ``0059559E`` that opened
@@ -403,9 +403,11 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
     """Check ``[Disciple] InWindow`` -- whether the *game* makes its own window.
 
     ``InWindow`` selects the game's **own** window mode; windowed presentation in
-    this pack comes from cnc-ddraw instead, so ``InWindow=1`` without a staged
-    wrapper asks for something nothing implements and is a WARN. A missing key is
-    a WARN too (the retail default is unknown).
+    this pack comes from cnc-ddraw instead, which needs the game itself fullscreen
+    (``docs/verification.md`` requires ``InWindow=0``). So ``InWindow=1`` is a WARN
+    in **every** case, wrapper or not; only ``InWindow=0`` passes. The message
+    follows ``_wrapper_check``'s own verdict ("installed and verified" only when
+    that check passes). A missing key is a WARN too (the retail default is unknown).
 
     This is a configuration guard, **not** a crash guard. The start-up
     ``C0000005`` at ``0059559E`` that opened this work happens with
@@ -445,22 +447,24 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
             "the Wine recipes use; cnc-ddraw presents the window when staged)",
         )
     if normalised in _TRUTHY:
-        kind, detail = _ddraw_route(exe_dir)
-        if kind is None:
+        # Always a WARN: the verification precondition is InWindow=0. The wording
+        # follows the wrapper check's own verdict (never a bare ddraw.dll or an
+        # env override), so the two lines cannot contradict each other.
+        if _wrapper_check(root, exe_dir).status == PASS:
             return Check(
                 "ini-window",
                 WARN,
-                f"[Disciple] InWindow={value.strip()} (the game makes its own window) "
-                f"and no cnc-ddraw staged: {_WINDOWED_NEEDS_WRAPPER} -- stage "
-                "cnc-ddraw next to Disciple.exe for a window, or set InWindow=0 in "
-                "Exe/DISCIPLE.INI to run the game fullscreen",
+                f"[Disciple] InWindow={value.strip()} (the game makes its own window); "
+                "cnc-ddraw is installed and verified, but it needs the game "
+                "fullscreen: set InWindow=0 in Exe/DISCIPLE.INI (docs/wrapper.md)",
             )
         return Check(
             "ini-window",
-            PASS,
-            f"[Disciple] InWindow={value.strip()} with cnc-ddraw staged ({detail}); "
-            "windowed presentation is provided by the wrapper, which does not need "
-            "the game's own window mode",
+            WARN,
+            f"[Disciple] InWindow={value.strip()} (the game makes its own window) "
+            f"and no verified cnc-ddraw: {_WINDOWED_NEEDS_WRAPPER} -- stage "
+            "cnc-ddraw next to Disciple.exe, or set InWindow=0 in "
+            "Exe/DISCIPLE.INI to run the game fullscreen",
         )
     return Check(
         "ini-window",

@@ -26,7 +26,8 @@ install may ship `InWindow=1`, so set it before running items 2–5 — otherwis
 you will record a windowing failure that is a setting, not a defect.
 
 `doctor` reports the key as its **`ini-window`** line: `PASS` for
-`InWindow=0`, `WARN` for `InWindow=1` with no cnc-ddraw staged (windowed
+`InWindow=0`, `WARN` for `InWindow=1` in every case (with a verified cnc-ddraw
+it says the wrapper needs the game fullscreen; without one, that windowed
 presentation needs it), `WARN` for a missing key. That WARN is a configuration
 guard only — it is neither a ticked box nor a claim about the start-up crash.
 
@@ -97,8 +98,8 @@ ruff check . && ruff format --check .  # clean
 disciples-play data --game-dir "/game-files/Disciples Gold" --json   # exit 0, 314 files
 disciples-play doctor --game-dir "/game-files/Disciples Gold"
                                        # exit 1 (the read-only mount: FAIL ini/ini-paths);
-                                       # ini-window follows that copy's own state: WARN
-                                       # before cnc-ddraw was staged there, PASS after
+                                       # ini-window follows that copy's own InWindow:
+                                       # WARN while 1 (wrapper or not), PASS at 0
                                        # (a configuration guard, not a crash fix)
 ```
 

@@ -29,9 +29,11 @@ release only after those eleven items are ticked.
   writability, installation paths, wine, `ddraw` override, wrapper, `InWindow`,
   music, video, display) with a fix hint per line and a stable `--json` schema.
   It is read-only, never prints a game hash, and never rewrites the display key.
-- **`ini-window` guard** — `doctor` warns when `[Disciple] InWindow=1` asks the
-  game for its own window with no cnc-ddraw staged ("windowed presentation needs
-  cnc-ddraw; the launcher does not write this key"), passes on `InWindow=0`, and
+- **`ini-window` guard** — `doctor` warns whenever `[Disciple] InWindow=1`, with
+  or without a wrapper (cnc-ddraw needs the game fullscreen; the wording follows
+  the `wrapper` check's verdict: "installed and verified, but it needs the game
+  fullscreen" vs "no verified cnc-ddraw: windowed presentation needs cnc-ddraw;
+  the launcher does not write this key"), passes only on `InWindow=0`, and
   warns when the key is absent (retail default unknown). Configuration only: the
   start-up crash at `0059559E` also happens with `InWindow=0`.
 - **`data` subcommand** — read-only structural report of the installation:
@@ -80,9 +82,9 @@ release only after those eleven items are ticked.
 - `disciples-play data` runs read-only over a retail install: 314 files, 131
   dBase III tables (header arithmetic closes on all), 19 `MQDB` containers.
 - `disciples-play doctor` runs read-only over the retail install, and its
-  `ini-window` line follows that copy's own state: `WARN` while no cnc-ddraw was
-  staged next to `Disciple.exe`, `PASS` once one was. A configuration guard in
-  both directions — it is not a crash fix.
+  `ini-window` line follows that copy's own `InWindow` value: `WARN` while it
+  is `1` (with or without cnc-ddraw), `PASS` once it is `0`. A configuration
+  guard — it is not a crash fix.
 - No game-derived file is tracked; the game folder is outside every git tree.
 
 ### Not verified

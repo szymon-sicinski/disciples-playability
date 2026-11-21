@@ -112,7 +112,8 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 > section.
 >
 > `doctor` reports `[Disciple] InWindow` as its `ini-window` line — `PASS` for
-> `0`, `WARN` for `1` with no cnc-ddraw staged, `WARN` for a missing key. That
+> `0`, `WARN` for `1` in every case (even with a verified cnc-ddraw, which needs
+> the game fullscreen), `WARN` for a missing key. That
 > line is a **configuration guard** ("windowed presentation needs cnc-ddraw; the
 > launcher does not write this key"), not a crash fix, and the launcher never
 > rewrites the key: it is your display choice, not a path.

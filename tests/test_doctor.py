@@ -608,8 +608,7 @@ def test_ddraw_override_reads_env(
 # --- ini-window: the game's own display mode ----------------------------------
 #
 # ``InWindow`` selects the game's own window mode; windowed presentation comes
-# from cnc-ddraw. So ``InWindow=1`` without a staged wrapper is an unsupported
-# configuration -- a WARN -- but it is NOT the cause of the start-up crash at
+# from cnc-ddraw. So ``InWindow=1`` is a WARN in every case (wrapper or not) -- but it is NOT the cause of the start-up crash at
 # 0059559E (that crash happens with InWindow=0 as well; display mode was tested
 # and falsified). These tests pin the verdicts and the wording, and the last one
 # asserts the check never claims to prevent a crash.
@@ -699,42 +698,97 @@ def test_ini_window_missing_key_is_a_warn(
     assert "InWindow=0" in out
 
 
-def test_ini_window_windowed_with_wrapper_is_a_pass(
+def _ini_and_wrapper_lines(capsys: pytest.CaptureFixture[str]) -> tuple[str, str]:
+    out = capsys.readouterr().out
+    return _line_for(out, "ini-window"), _line_for(out, "wrapper")
+
+
+def _assert_no_false_wrapper_claim(ini_line: str) -> None:
+    assert ini_line.startswith("WARN ini-window:")
+    assert "no verified cnc-ddraw" in ini_line
+    assert "staged" not in ini_line
+    assert "provided by the wrapper" not in ini_line
+    assert "installed and verified" not in ini_line
+    assert "stage cnc-ddraw next to Disciple.exe" in ini_line
+    assert "InWindow=0" in ini_line
+
+
+def test_ini_window_windowed_with_verified_wrapper_still_warns(
     tmp_path: Path,
     fake_wine,
     with_display,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """With cnc-ddraw staged, windowed presentation is supported -- no WARN."""
+    """d. Verified wrapper + InWindow=1: WARN, installed and verified, set InWindow=0."""
     monkeypatch.delenv("WINEDLLOVERRIDES", raising=False)
     root = make_install(tmp_path / "install", with_wrapper=True, inwindow="1", rewritten=True)
-    code = main(["doctor", "--game-dir", str(root)])
-    assert code == 0
+    assert main(["doctor", "--game-dir", str(root)]) == 0
 
-    out = capsys.readouterr().out
-    assert "PASS ini-window:" in out
-    assert "with cnc-ddraw staged" in out
-    assert "WARN ini-window:" not in out
+    ini_line, wrapper_line = _ini_and_wrapper_lines(capsys)
+    assert wrapper_line.startswith("PASS wrapper:")
+    assert ini_line.startswith("WARN ini-window:")
+    assert "cnc-ddraw is installed and verified" in ini_line
+    assert "needs the game fullscreen" in ini_line
+    assert "set InWindow=0 in Exe/DISCIPLE.INI" in ini_line
+    assert "provided by the wrapper" not in ini_line
 
 
-def test_ini_window_windowed_with_env_override_is_a_pass(
+def test_ini_window_windowed_with_env_override_only_warns_without_wrapper_claim(
     tmp_path: Path,
     fake_wine,
     with_display,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The env override is the other way a ddraw route exists; it counts too."""
+    """c. WINEDLLOVERRIDES=ddraw=n,b with no DLL: never borrow the cnc-ddraw label."""
     monkeypatch.setenv("WINEDLLOVERRIDES", "ddraw=n,b")
     root = make_install(tmp_path / "install", inwindow="1", rewritten=True)
-    code = main(["doctor", "--game-dir", str(root)])
-    assert code == 0
+    assert main(["doctor", "--game-dir", str(root)]) == 0
 
-    out = capsys.readouterr().out
-    assert "PASS ini-window:" in out
-    assert "WINEDLLOVERRIDES=" in out
-    assert "WARN ini-window:" not in out
+    ini_line, wrapper_line = _ini_and_wrapper_lines(capsys)
+    assert wrapper_line.startswith("WARN wrapper:")
+    assert "cnc-ddraw not installed" in wrapper_line
+    _assert_no_false_wrapper_claim(ini_line)
+    assert "WINEDLLOVERRIDES" not in ini_line
+
+
+def test_ini_window_windowed_with_foreign_ddraw_is_consistent_with_wrapper_line(
+    tmp_path: Path,
+    fake_wine,
+    with_display,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """a. A foreign ddraw.dll and no marker."""
+    monkeypatch.delenv("WINEDLLOVERRIDES", raising=False)
+    root = make_install(tmp_path / "install", inwindow="1", rewritten=True)
+    (root / "Exe" / "ddraw.dll").write_bytes(b"not ours")
+    assert main(["doctor", "--game-dir", str(root)]) == 0
+
+    ini_line, wrapper_line = _ini_and_wrapper_lines(capsys)
+    assert wrapper_line.startswith("WARN wrapper:")
+    assert "no valid marker" in wrapper_line
+    _assert_no_false_wrapper_claim(ini_line)
+
+
+def test_ini_window_windowed_with_digest_mismatch_is_consistent_with_wrapper_line(
+    tmp_path: Path,
+    fake_wine,
+    with_display,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """b. A marker whose digest does not match the DLL."""
+    monkeypatch.delenv("WINEDLLOVERRIDES", raising=False)
+    root = make_install(tmp_path / "install", with_wrapper=True, inwindow="1", rewritten=True)
+    (root / "Exe" / "ddraw.dll").write_bytes(b"swapped after install")
+    assert main(["doctor", "--game-dir", str(root)]) == 0
+
+    ini_line, wrapper_line = _ini_and_wrapper_lines(capsys)
+    assert wrapper_line.startswith("WARN wrapper:")
+    assert "digest does not match" in wrapper_line
+    _assert_no_false_wrapper_claim(ini_line)
 
 
 def test_ini_window_key_is_matched_case_insensitively(
