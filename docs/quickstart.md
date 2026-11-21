@@ -30,8 +30,9 @@ anywhere, and never modifies anything outside that one INI unless you pass
 
 **`disciples-play doctor --game-dir …`** prints one `PASS`/`FAIL`/`WARN` line
 per check — install resolves, INI writable, installation paths absolute,
-`wine` present, `ddraw` override, wrapper staged, music count, video count,
-display — with a one-line fix hint on every non-PASS line. Exit `0` means no
+`wine` present, `ddraw` override, wrapper staged, the INI's own `InWindow`
+window mode, music count, video count, display — with a one-line fix hint on
+every non-PASS line. Exit `0` means no
 check failed (warnings do not fail it); `1` means something blocks play; `2` is
 a bad command line. It is read-only.
 
@@ -55,9 +56,17 @@ Today the pack contains the pinned fetch and preset as the
 wired yet**: copy `ddraw.dll` and `ddraw.ini` from the pinned `v7.1.0.0`
 release into the game's `Exe/` folder next to `Disciple.exe` (recipe:
 [`wine-recipe.md`](wine-recipe.md) §1d), keep the game itself fullscreen
-(`InWindow=0`), and run the launcher — it sets `WINEDLLOVERRIDES=ddraw=n,b`
+(`InWindow=0` — windowed presentation comes from cnc-ddraw, not from the game's
+own window mode, so `doctor` warns on `InWindow=1` in every case, a wrapper
+staged or not), and
+run the launcher — it sets `WINEDLLOVERRIDES=ddraw=n,b`
 automatically once it finds the DLL. [`wrapper.md`](wrapper.md) documents the
 preset and the digest pin.
+
+> **Known: the game dies at start-up under plain Wine.** `Exception C0000005` at
+> `0059559E`, the same with `InWindow=0` and `InWindow=1`; see
+> [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine)
+> for the evidence and the candidates. This is unresolved in v0.1.0.
 
 ## If something does not work
 

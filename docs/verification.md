@@ -4,7 +4,7 @@
 under item 1. No agent in this project has a display or a Wine runtime, so
 nothing here has been observed in-game by an agent. The test suite proves the
 INI rewrite, the CLI contract, the doctor's checks and the data scanner against
-synthetic fixtures (216 tests) plus a read-only pass over the retail install
+synthetic fixtures (226 tests) plus a read-only pass over the retail install
 (2 tests); it cannot prove the game *plays*.
 
 **Partial result (maintainer, 2026-11-21):** the main menu **was** reached and
@@ -32,9 +32,24 @@ disciples-play doctor --game-dir "$GAME"
 
 **Items 2–5 precondition:** the wrapper only presents a window when the *game*
 is fullscreen, i.e. `InWindow=0` in `Exe/DISCIPLE.ini`. The launcher never writes
-that key and a retail install may ship `InWindow=1`, so check it before running
-items 2–5 — otherwise you will record a windowing failure that is a setting,
-not a defect.
+that key (the 21 installation paths are the only thing it rewrites) and a retail
+install may ship `InWindow=1`, so set it before running items 2–5 — otherwise
+you will record a windowing failure that is a setting, not a defect.
+
+`doctor` reports the key as its **`ini-window`** line: `PASS` for
+`InWindow=0`, `WARN` for `InWindow=1` in every case (with a verified cnc-ddraw
+it says the wrapper needs the game fullscreen; without one, that windowed
+presentation needs it), `WARN` for a missing key. That WARN is a configuration
+guard only — it is neither a ticked box nor a claim about the start-up crash.
+
+**The start-up crash is separate and unresolved.** On 2026-11-21 the game died
+with `Exception C0000005` (write to `0x00000000`, EIP `0059559E`) after its own
+start-up log line — with `InWindow=0` **and** `InWindow=1`. Display mode is ruled
+out; the evidence and the open candidates are in
+[`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine).
+Item 1 cannot be ticked until the pack's own command is what reaches the menu
+(see item 1's note); a Proton-aware launch path would satisfy that without
+resolving `0059559E`.
 
 ---
 
@@ -91,11 +106,16 @@ Run at the M6 head on Linux, Python 3.14 (the maintainer's Python 3.10–3.13 is
 covered by CI):
 
 ```bash
-python -m pytest -q                    # 216 passed, 2 skipped (realgame)
+python -m pytest -q                    # 226 passed, 2 skipped (realgame)
 DISCIPLES_GAME_DIR="/game-files/Disciples Gold" python -m pytest -q tests/test_realgame.py
                                        # 2 passed, read-only against the retail copy
 ruff check . && ruff format --check .  # clean
 disciples-play data --game-dir "/game-files/Disciples Gold" --json   # exit 0, 314 files
+disciples-play doctor --game-dir "/game-files/Disciples Gold"
+                                       # exit 1 (the read-only mount: FAIL ini/ini-paths);
+                                       # ini-window follows that copy's own InWindow:
+                                       # WARN while 1 (wrapper or not), PASS at 0
+                                       # (a configuration guard, not a crash fix)
 ```
 
 That proves the code does what it says on the data it was given. It does not

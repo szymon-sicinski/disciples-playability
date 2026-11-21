@@ -33,6 +33,11 @@ The checks, in output order:
                  the detail points at the Proton recipe for start-up crashes
 ``ddraw-override`` a ``ddraw`` override routes ``ddraw`` to native (env or wrapper)
 ``wrapper``      cnc-ddraw staged with a marker matching the DLL's digest
+``ini-window``   ``[Disciple] InWindow`` -- the game's own display mode. ``0`` is
+                 the fullscreen baseline; ``1`` always WARNs, because cnc-ddraw
+                 needs the game itself fullscreen. The wording follows the
+                 ``wrapper`` line's verdict. The doctor never writes the key (it
+                 is the user's choice)
 ``music``        25 ``.wav`` files in ``Music/``
 ``video``        41 ``.smk`` cutscenes (6 ``Video/`` + 35 ``Briefing/``)
 ``display``      an X display is available to verify windowing
@@ -74,6 +79,22 @@ _EXPECTED_MUSIC_WAVS = 25
 #: The number of ``.smk`` cutscenes a complete install ships: 6 in ``Video/``
 #: plus 35 in ``Briefing/``.
 _EXPECTED_VIDEO_SMKS = 41
+
+#: What the ``InWindow=1`` WARN without a verified wrapper says: windowed presentation is
+#: the wrapper's job, and the launcher deliberately does not rewrite the display
+#: key -- it is the user's choice, unlike the 21 installation paths. This is a
+#: configuration statement only: the start-up crash at ``0059559E`` that opened
+#: this card also happens with ``InWindow=0``, so display mode is not its cause
+#: and this check makes no claim about crashing.
+_WINDOWED_NEEDS_WRAPPER = (
+    "windowed presentation needs cnc-ddraw; the launcher does not write this key"
+)
+
+#: Values of ``[Disciple] InWindow`` read as "the game makes its own window" and
+#: as "the game is fullscreen". The game writes ``0``/``1``; the words are
+#: accepted so a hand-edited INI is classified rather than called unrecognised.
+_TRUTHY = ("1", "true", "yes", "on")
+_FALSY = ("0", "false", "no", "off")
 
 
 @dataclass(frozen=True)
@@ -193,10 +214,13 @@ def run_doctor(candidate: str | os.PathLike[str], wine_name: str = "wine") -> Re
     checks.append(_wine_check(wine_name))
 
     # --- ddraw override ---------------------------------------------------
-    checks.append(_ddraw_override_check(root, exe_dir))
+    checks.append(_ddraw_override_check(exe_dir))
 
     # --- wrapper ----------------------------------------------------------
     checks.append(_wrapper_check(root, exe_dir))
+
+    # --- ini-window (the game's own display mode) -------------------------
+    checks.append(_ini_window_check(root, ini_path, exe_dir))
 
     # --- music / video ----------------------------------------------------
     checks.append(_music_check(root))
@@ -344,15 +368,28 @@ def _wine_check(wine_name: str) -> Check:
     )
 
 
-def _ddraw_override_check(root: Path | None, exe_dir: Path | None) -> Check:
+def _ddraw_route(exe_dir: Path | None) -> tuple[str | None, str]:
+    """Return ``(kind, detail)`` for a native ``ddraw`` route, or ``(None, "")``.
+
+    ``kind`` is ``"env"`` when ``WINEDLLOVERRIDES`` routes ``ddraw`` to native and
+    ``"staged"`` when a ``ddraw.dll`` sits next to ``Disciple.exe`` (which makes
+    the launcher set the override itself). The doctor's ``ddraw-override`` and
+    ``ini-window`` checks both read this one function, so they cannot disagree
+    about whether a wrapper is in play.
+    """
     env_overrides = os.environ.get("WINEDLLOVERRIDES", "")
     if launch.has_native_ddraw_override(env_overrides):
-        return Check(
-            "ddraw-override",
-            PASS,
-            f"WINEDLLOVERRIDES={env_overrides!r} routes ddraw to native",
-        )
-    if root is not None and _find_file_case_insensitive(exe_dir, "ddraw.dll") is not None:
+        return "env", f"WINEDLLOVERRIDES={env_overrides!r} routes ddraw to native"
+    if _find_file_case_insensitive(exe_dir, "ddraw.dll") is not None:
+        return "staged", "ddraw.dll staged next to Disciple.exe"
+    return None, ""
+
+
+def _ddraw_override_check(exe_dir: Path | None) -> Check:
+    kind, detail = _ddraw_route(exe_dir)
+    if kind == "env":
+        return Check("ddraw-override", PASS, detail)
+    if kind == "staged":
         return Check(
             "ddraw-override",
             PASS,
@@ -365,6 +402,82 @@ def _ddraw_override_check(root: Path | None, exe_dir: Path | None) -> Check:
         'no ddraw override in effect; set WINEDLLOVERRIDES="ddraw=n,b" or '
         "winecfg -> Libraries -> ddraw -> native,builtin "
         "(the launcher sets it automatically once cnc-ddraw is staged)",
+    )
+
+
+def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | None) -> Check:
+    """Check ``[Disciple] InWindow`` -- whether the *game* makes its own window.
+
+    ``InWindow`` selects the game's **own** window mode; windowed presentation in
+    this pack comes from cnc-ddraw instead, which needs the game itself fullscreen
+    (``docs/verification.md`` requires ``InWindow=0``). So ``InWindow=1`` is a WARN
+    in **every** case, wrapper or not; only ``InWindow=0`` passes. The message
+    follows ``_wrapper_check``'s own verdict ("installed and verified" only when
+    that check passes). A missing key is a WARN too (the retail default is unknown).
+
+    This is a configuration guard, **not** a crash guard. The start-up
+    ``C0000005`` at ``0059559E`` that opened this work happens with
+    ``InWindow=0`` as well, so display mode is not its cause; nothing here claims
+    to prevent it.
+
+    The check only reads: ``InWindow`` is the user's display choice, so neither
+    the doctor nor the launcher writes it (the launcher rewrites the 21 path
+    keys and nothing else).
+    """
+    if root is None:
+        return Check("ini-window", FAIL, "cannot check: install not resolved")
+    if ini_path is None:
+        return Check("ini-window", FAIL, "cannot check: DISCIPLE.INI not found")
+    try:
+        text = ini.read_ini(ini_path)
+    except (OSError, UnicodeDecodeError) as exc:
+        return Check("ini-window", FAIL, f"cannot read {ini_path}: {exc}")
+
+    value = _assignments(text).get("disciple", {}).get("inwindow")
+    if value is None:
+        return Check(
+            "ini-window",
+            WARN,
+            "DISCIPLE.INI has no [Disciple] InWindow key (the retail default is "
+            f"unknown); {_WINDOWED_NEEDS_WRAPPER} -- set InWindow=0 in "
+            "Exe/DISCIPLE.INI to run the game fullscreen, and stage cnc-ddraw "
+            "next to Disciple.exe when you want a window (docs/wrapper.md)",
+        )
+
+    normalised = value.strip().lower()
+    if normalised in _FALSY:
+        return Check(
+            "ini-window",
+            PASS,
+            f"[Disciple] InWindow={value.strip()} (the game fullscreen -- the baseline "
+            "the Wine recipes use; cnc-ddraw presents the window when staged)",
+        )
+    if normalised in _TRUTHY:
+        # Always a WARN: the verification precondition is InWindow=0. The wording
+        # follows the wrapper check's own verdict (never a bare ddraw.dll or an
+        # env override), so the two lines cannot contradict each other.
+        if _wrapper_check(root, exe_dir).status == PASS:
+            return Check(
+                "ini-window",
+                WARN,
+                f"[Disciple] InWindow={value.strip()} (the game makes its own window); "
+                "cnc-ddraw is installed and verified, but it needs the game "
+                "fullscreen: set InWindow=0 in Exe/DISCIPLE.INI (docs/wrapper.md)",
+            )
+        return Check(
+            "ini-window",
+            WARN,
+            f"[Disciple] InWindow={value.strip()} (the game makes its own window) "
+            f"and no verified cnc-ddraw: {_WINDOWED_NEEDS_WRAPPER} -- set "
+            "InWindow=0 in Exe/DISCIPLE.INI to run the game fullscreen, and stage "
+            "cnc-ddraw next to Disciple.exe when you want a window",
+        )
+    return Check(
+        "ini-window",
+        WARN,
+        f"[Disciple] InWindow={value.strip()!r} is neither 0 nor 1; use 0 in "
+        "Exe/DISCIPLE.INI to run the game fullscreen and let cnc-ddraw present the "
+        "window",
     )
 
 
@@ -462,9 +575,16 @@ def _display_check() -> Check:
 # --------------------------------------------------------------------------
 
 
-def _installation_assignments(text: str) -> dict[str, dict[str, str]]:
-    """Return ``{section: {key: value}}`` for the two installation sections."""
-    result: dict[str, dict[str, str]] = {"installation": {}, "installationclient": {}}
+def _assignments(text: str) -> dict[str, dict[str, str]]:
+    """Return ``{section: {key: value}}`` for every section, names lowercased.
+
+    Section headers and keys are matched case-insensitively (the retail INI
+    writes ``InWindow`` while the synthetic fixtures and the plan use lowercase),
+    comment lines are skipped, and a value is taken verbatim after the first
+    ``=``. ``[Disciple]`` is where the game keeps its own display mode; the two
+    installation sections are read through :func:`_installation_assignments`.
+    """
+    result: dict[str, dict[str, str]] = {}
     section: str | None = None
     for line in ini.parse(text).lines:
         content = line.content.strip()
@@ -472,12 +592,19 @@ def _installation_assignments(text: str) -> dict[str, dict[str, str]]:
             continue
         if content.startswith("[") and content.endswith("]"):
             section = content[1:-1].strip().lower()
+            result.setdefault(section, {})
             continue
-        if section in result:
+        if section is not None:
             key, sep, value = content.partition("=")
             if sep and key.strip():
                 result[section][key.strip().lower()] = value.strip()
     return result
+
+
+def _installation_assignments(text: str) -> dict[str, dict[str, str]]:
+    """Return ``{section: {key: value}}`` for the two installation sections."""
+    assignments = _assignments(text)
+    return {name: assignments.get(name, {}) for name in ("installation", "installationclient")}
 
 
 def _classify_installation_value(value: str, root: Path, windows_root: str, folder: str) -> str:

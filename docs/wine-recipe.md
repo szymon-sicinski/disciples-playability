@@ -79,6 +79,59 @@ disciples-play doctor --game-dir "/path/to/Disciples Gold"
 
 ---
 
+## Known crash at start-up: `0059559E` (unresolved on plain `wine`)
+
+As of **2026-11-21** this title does not reach the main menu from this pack's
+launcher on plain Wine (wine-11.21 Staging, wow64), in **either** display mode.
+It is not a configuration fault that a recipe below can undo: the way round it is
+a different launch environment — the supported sequence at the top of this file,
+not a Wine setting. No Wine-side fix is known.
+
+What the runs on plain `wine` showed:
+
+```
+Disciple.log   "Midgard (v.2000, 6, 22, 1) started on Sat Nov 21 19:13:04 2026"
+               -> the game's own startup code runs, then it dies
+crash          Exception C0000005, write to 0x00000000, EIP 0059559E, EAX=0
+               mov eax,[esi+8] ; mov eax,[eax+8] ; push eax
+               mov ecx,[eax]   ; call [ecx+0x58]
+               -> [this+8] is a valid object whose own +8 member is null, and the
+                  game calls a virtual method through it with no null check
+imports        Disciple.exe imports no ddraw/dsound/dinput; SHW32.dll is the
+               graphics layer
+launcher       all 21 installation keys rewritten, DISCIPLE.ini.orig written --
+               the rewrite itself is fine
+wrapper        no ddraw.dll staged in the first copy that crashed; the second
+               run had the wrapper staged and faulted the same way
+```
+
+Tested and **ruled out**:
+
+| Candidate | Result |
+|---|---|
+| `[Disciple] InWindow=1` (the game's own window mode) | **crashes at `0059559E`** |
+| `[Disciple] InWindow=0` (fullscreen, the retail baseline) | **crashes at `0059559E`** — same fault |
+
+Display mode is therefore not the cause, and the retail fullscreen baseline is
+not the fix. Two candidates are **ruled out** by later runs under plain `wine`
+(recorded in the launch-path work): a **staged cnc-ddraw** (`ddraw.dll` +
+`ddraw.ini`) reaches the same fault, and the engine's own **GDI path**
+(`DDraw=0`) starts with sound but a black screen. Still open: a non-`wow64`
+Wine build, and a different Windows version in the prefix (`winecfg` → Windows
+version).
+
+`doctor`'s `ini-window` line is a **configuration guard, not a crash fix**: it
+warns on every `[Disciple] InWindow=1` (cnc-ddraw needs the game fullscreen,
+so a window the game makes itself is never the supported setup), and passes only
+on `InWindow=0`. Neither verdict says
+anything about whether the game starts.
+
+Root-cause work on `0059559E` continues outside this card. Do not add a
+workaround that silently rewrites `DDraw`, `InWindow` or the Wine binary — a
+silent change would hide the setting from whoever debugs it next.
+
+---
+
 ## 1. Plain Wine
 
 > **Observed not to start this title** (maintainer, 2026-11-21): plain `wine`
@@ -242,12 +295,15 @@ already has.
 
 ## If the screen is black
 
-For any recipe, in this order:
+A black screen or a window that never appears is a *presentation* problem and is
+not the start-up crash above. For any recipe, in this order:
 
-1. **Game fullscreen, wrapper windowed.** cnc-ddraw requires the *game* to be
+1. **Game fullscreen, wrapper windowed.** cnc-ddraw expects the *game* to be
    fullscreen (`InWindow=0`); windowing comes from the wrapper. A game that is
    itself windowed fights cnc-ddraw. Confirm `InWindow=0` in `Exe\DISCIPLE.INI`
-   (the launcher does not change it).
+   (the launcher does not change it; `doctor`'s `ini-window` line reports it).
+   If the game dies at start-up with `C0000005` at `0059559E` instead, you have
+   the unresolved crash above, not a black-screen cause.
 2. **Override in effect.** `disciples-play doctor --game-dir …` → the
    `ddraw-override` line must be PASS. If not, set `WINEDLLOVERRIDES=ddraw=n,b`
    (or the winecfg/Bottles/Heroic equivalent above).
