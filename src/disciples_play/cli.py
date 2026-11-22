@@ -137,10 +137,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     doctor_parser = subparsers.add_parser(
         "doctor",
-        help="check this machine and install, one PASS/FAIL/WARN line per check",
+        help="check this machine and install, one PASS/FAIL/WARN/INFO line per check",
         description=(
             "Check that this machine and install have what the pack needs, one "
-            "line per check. Exit codes: 0 all pass, 1 any fail, 2 bad arguments."
+            "line per check. Exit codes: 0 no fail, 1 any fail, 2 bad arguments."
         ),
     )
     # ``--game-dir`` is accepted here too (``disciples-play doctor --game-dir …``),

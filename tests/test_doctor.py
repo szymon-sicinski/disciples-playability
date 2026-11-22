@@ -213,7 +213,7 @@ def test_all_pass_exits_zero(
         "ini": "PASS",
         "ini-paths": "PASS",
         "wine": "PASS",
-        "ddraw-override": "WARN",  # always WARNs for this title (COM path; override inert)
+        "ddraw-override": "INFO",  # always INFO for this title (COM path; override inert)
         "wrapper": "PASS",
         "ini-window": "PASS",
         "music": "PASS",
@@ -314,7 +314,7 @@ def test_wrapper_digest_mismatch_is_a_warn(
     out = capsys.readouterr().out
     assert "WARN wrapper:" in out
     assert "not ours" in out
-    assert "WARN ddraw-override:" in out  # staging no longer counts as healthy
+    assert "INFO ddraw-override:" in out  # staging no longer counts as healthy
     assert "inert for Disciples" in out
 
 
@@ -378,7 +378,7 @@ def test_json_schema_is_stable(
     ids = []
     for check in payload["checks"]:
         assert set(check) == {"id", "status", "detail"}
-        assert check["status"] in ("pass", "fail", "warn")
+        assert check["status"] in ("pass", "fail", "warn", "info")
         ids.append(check["id"])
     assert ids == [
         "install",
@@ -585,10 +585,10 @@ def test_ddraw_override_rejects_non_native(
     monkeypatch.setenv("WINEDLLOVERRIDES", override)
     root = make_install(tmp_path / "install", rewritten=True)  # no wrapper staged
     code = main(["doctor", "--game-dir", str(root)])
-    assert code == 0  # a missing override is a WARN, not a FAIL
+    assert code == 0  # a missing override is INFO, not a FAIL
     out = capsys.readouterr().out
     assert "PASS ddraw-override:" not in out
-    assert "WARN ddraw-override:" in out
+    assert "INFO ddraw-override:" in out
 
 
 def test_ddraw_override_reads_env(
@@ -603,9 +603,33 @@ def test_ddraw_override_reads_env(
     code = main(["doctor", "--game-dir", str(root)])
     assert code == 0
     out = capsys.readouterr().out
-    assert "WARN ddraw-override:" in out  # configured, but inert for this title
+    assert "INFO ddraw-override:" in out  # configured, but inert for this title
     assert "WINEDLLOVERRIDES" in out
     assert "CoCreateInstance(CLSID_DirectDraw)" in out
+
+
+def test_ddraw_override_env_and_staged_takes_env_wording(
+    tmp_path: Path,
+    fake_wine,
+    with_display,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """env+staged: the env route is checked first, so it keeps the env wording.
+
+    ``_ddraw_route`` reads ``WINEDLLOVERRIDES`` before looking for a staged
+    ``ddraw.dll``, so when both are in play the line must name the env route --
+    not claim a staged DLL is the configured route.
+    """
+    monkeypatch.setenv("WINEDLLOVERRIDES", "ddraw=n,b")
+    root = make_install(tmp_path / "install", with_wrapper=True, rewritten=True)
+    code = main(["doctor", "--game-dir", str(root)])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "INFO ddraw-override:" in out
+    assert "WINEDLLOVERRIDES" in out  # the env route wins the wording
+    assert "staged next to Disciple.exe" not in out
+    assert "inert for Disciples" in out
 
 
 # --- ini-window: the game's own display mode ----------------------------------
