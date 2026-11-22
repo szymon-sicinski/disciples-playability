@@ -90,3 +90,4 @@ desktop.ini
 *.log
 !tests/fixtures/**/*.log
 .pytest-scratch/
+.worktrees/
