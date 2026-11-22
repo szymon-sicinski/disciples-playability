@@ -315,7 +315,7 @@ def test_wrapper_digest_mismatch_is_a_warn(
     assert "WARN wrapper:" in out
     assert "not ours" in out
     assert "INFO ddraw-override:" in out  # staging no longer counts as healthy
-    assert "inert for Disciples" in out
+    _assert_inert_sentence(out)
 
 
 @pytest.mark.skipif(WINDOWS, reason="wine check PASSes on Windows (not needed to launch)")
@@ -629,7 +629,7 @@ def test_ddraw_override_env_and_staged_takes_env_wording(
     assert "INFO ddraw-override:" in out
     assert "WINEDLLOVERRIDES" in out  # the env route wins the wording
     assert "staged next to Disciple.exe" not in out
-    assert "inert for Disciples" in out
+    _assert_inert_sentence(out)
 
 
 # --- ini-window: the game's own display mode ----------------------------------
@@ -644,6 +644,22 @@ WINDOWED_NEEDS_WRAPPER = (
     "windowed presentation is not delivered by this pack for this title: "
     "the renderer never loads cnc-ddraw (the game asks COM for system32\\ddraw.dll)"
 )
+
+
+INERT_SENTENCE = (
+    "inert for Disciples' renderer: it acquires DirectDraw via "
+    "CoCreateInstance(CLSID_DirectDraw) -> system32\\ddraw.dll (COM), so it does "
+    "not load a staged ddraw.dll and ddraw=n,b only falls back to builtin there "
+    "(the video player's by-name load is untested)"
+)
+
+
+def _assert_inert_sentence(out: str) -> None:
+    """Pin the WHOLE sentence: a prefix match let a garbled join ('so a the ...')
+    ship, and let the unscoped wording back in."""
+    assert INERT_SENTENCE in out
+    assert "so a the" not in out
+    assert "inert for Disciples:" not in out  # unscoped: 'the game', not the renderer
 
 
 def _line_for(out: str, check_id: str) -> str:

@@ -374,9 +374,11 @@ not the start-up crash above. For any recipe, in this order:
    always `INFO` — it cannot fail, and it cannot be cleared by any action, so it
    does not count against the exit code — because the game acquires DirectDraw
    via
-   `CoCreateInstance(CLSID_DirectDraw)` (COM), so the override and a staged
-   `ddraw.dll` are inert and cannot be the cause of a black screen. It only
-   matters for titles that `LoadLibrary("ddraw.dll")` by name.
+   `CoCreateInstance(CLSID_DirectDraw)` (COM), so for the renderer the override
+   and a staged `ddraw.dll` are inert and are not the cause of a black *game*
+   screen. (The video player's by-name `LoadLibraryA("DDRAW.DLL")` is untested,
+   so a black screen **during a cutscene** is not ruled out.) It matters for
+   titles that `LoadLibrary("ddraw.dll")` by name.
 3. **Fall back renderer.** cnc-ddraw reads `ddraw.ini` from next to the game
    executable; edit it to set `renderer=gdi` (the software fallback — the most
    compatible renderer when OpenGL/Direct3D9 misbehave under a driver or

@@ -16,7 +16,7 @@ can never leak into a transcript.
 
 Exit codes (documented in ``docs/cli.md``):
 
-* ``0`` -- every check passed (warnings do not fail the run)
+* ``0`` -- no check failed (WARN and INFO lines do not fail the run)
 * ``1`` -- at least one check failed
 * ``2`` -- bad arguments (no install source specified, or an argparse error)
 
@@ -392,17 +392,18 @@ def _ddraw_route(exe_dir: Path | None) -> tuple[str | None, str]:
 def _ddraw_override_check(exe_dir: Path | None) -> Check:
     """Report the ddraw route as information, never a WARN or FAIL.
 
-    For this title the override is inert in every route (COM, not a by-name
-    ``LoadLibrary``), so no user action can clear it: a WARN would train users
+    For this title's renderer the override is inert in every route (COM, not a
+    by-name ``LoadLibrary``; the video player's by-name load is untested), so no
+    user action can clear it: a WARN would train users
     to ignore warnings, and a FAIL would block play on nothing. The detail
     keeps the measured wording; only the status is informational.
     """
     kind, detail = _ddraw_route(exe_dir)
     inert = (
-        "inert for Disciples: the game acquires DirectDraw via "
-        "CoCreateInstance(CLSID_DirectDraw) -> system32\\ddraw.dll (COM), so a "
-        "the renderer does not load a staged ddraw.dll and ddraw=n,b only falls back "
-        "to builtin"
+        "inert for Disciples' renderer: it acquires DirectDraw via "
+        "CoCreateInstance(CLSID_DirectDraw) -> system32\\ddraw.dll (COM), so it does "
+        "not load a staged ddraw.dll and ddraw=n,b only falls back to builtin there "
+        "(the video player's by-name load is untested)"
     )
     if kind in ("env", "staged"):
         return Check(

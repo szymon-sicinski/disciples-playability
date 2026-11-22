@@ -133,9 +133,10 @@ see [where the two files go](#where-the-two-files-go).
 
 > **For Disciples this override is inert.** The game acquires DirectDraw through
 > `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll`, so `n` is never
-> reached and the override always falls back to `b` (builtin). It does no harm
-> and is still what the launcher sets when it finds a staged DLL, but it does
-> not make the staged `ddraw.dll` take over. See
+> reached *by the renderer* and the override falls back to `b` (builtin) there.
+> It does no harm and is still what the launcher sets when it finds a staged
+> DLL, but it does not make the staged `ddraw.dll` take over the renderer. (The
+> video player's by-name load is untested.) See
 > [`wine-recipe.md`](wine-recipe.md) "Known crash at start-up".
 
 ## Updating the pin
