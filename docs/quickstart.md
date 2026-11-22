@@ -51,21 +51,39 @@ Exit codes: `0` success, `2` bad/missing install, `3` the INI could not be
 written, `4` Wine not found. The full contract is in
 [`cli.md`](cli.md).
 
+**Bigger window, centred — a recipe, not a launcher flag.** Wrap the whole
+command in `gamescope`, from the install's `Exe/`:
+
+```bash
+gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- \
+    wine explorer /desktop=Disciples,640x480 Disciple.exe
+```
+
+Measured 2026-11-22 (KDE Plasma on Wayland, 2560×1440 monitor, system Wine
+11.21, `InWindow=0`): a **1920×1440** window, centred, with the game picture
+filling it — exactly 3× — and clicking menu items hits the item under the
+cursor. Whether the pixels are sharp, audio, a full session and Alt+Tab inside
+gamescope were **not** assessed. Details and the not-tried list:
+[`wine-recipe.md`](wine-recipe.md#bigger-window-a-gamescope-recipe-not-something-the-launcher-does).
+There is no `--gamescope` flag; the launcher only chooses the virtual-desktop
+size.
+
 ## Getting the window (cnc-ddraw)
 
-Windowed, integer-scaled presentation comes from
+Windowed, integer-scaled presentation was planned to come from
 [cnc-ddraw](https://github.com/FunkyFr3sh/cnc-ddraw) (MIT), not from the game.
-Today the pack contains the pinned fetch and preset as the
-`disciples_play.wrapper` module, but **the one-line install command is not
-wired yet**: copy `ddraw.dll` and `ddraw.ini` from the pinned `v7.1.0.0`
-release into the game's `Exe/` folder next to `Disciple.exe` (recipe:
-[`wine-recipe.md`](wine-recipe.md) §1d), keep the game itself fullscreen
-(`InWindow=0` — windowed presentation comes from cnc-ddraw, not from the game's
-own window mode, so `doctor` warns on `InWindow=1` in every case, a wrapper
-staged or not), and
-run the launcher — it sets `WINEDLLOVERRIDES=ddraw=n,b`
-automatically once it finds the DLL. [`wrapper.md`](wrapper.md) documents the
-preset and the digest pin.
+**Measured 2026-11-22: this does not work for Disciples.** The game acquires
+DirectDraw through `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll`
+(COM), so the renderer does not load a `ddraw.dll` staged in `Exe/`, and the
+`WINEDLLOVERRIDES=ddraw=n,b` the launcher sets once it finds the DLL is inert —
+it can only fall back to builtin. The override remains valid for titles that
+`LoadLibrary("ddraw.dll")` by name, but for Disciples' renderer it is not a fix, and
+windowed/upscaled presentation is therefore **not delivered by this pack**
+today. **Why the same title starts under a Proton runner is not measured** —
+and it is not a different ddraw implementation (DXVK provides Direct3D, not
+`IDirectDraw`); see [`wine-recipe.md`](wine-recipe.md) "Start here" for what is
+known and what is open.
+[`wrapper.md`](wrapper.md) documents the preset and the digest pin.
 
 > **Known: plain Wine needs a 640x480 display mode.** Without one the game dies
 > at start-up with `Exception C0000005` at `0059559E`, the same with `InWindow=0`
@@ -92,7 +110,9 @@ recorded there: the game *does* reach its main menu, launched by pressing Play i
 Heroic with a Proton-GE runner, and on 2026-11-22 by plain `wine` 11.21 in a
 640×480 Wine virtual desktop. Lutris follows the same recipe but has not been
 run, and the virtual-desktop route has not been re-run with the wrapper staged.
-What remains unproven among the rest: the 3× window, palette animation, mouse
-targeting at scale, music without the CD, portability after moving the folder,
-and a second prefix. Read that file before believing any claim in this
-repository about the game *playing*.
+The 3× window and mouse targeting at 3× each have **one observation** now
+(gamescope, 2026-11-22: a 1920×1440 window, clicks landing on the item under the
+cursor) but no ticked box — nobody has checked pixel sharpness. Still unproven
+among the rest: palette animation, music without the CD, portability after
+moving the folder, and a second prefix. Read that file before believing any
+claim in this repository about the game *playing*.

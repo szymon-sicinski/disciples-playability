@@ -213,7 +213,7 @@ def test_all_pass_exits_zero(
         "ini": "PASS",
         "ini-paths": "PASS",
         "wine": "PASS",
-        "ddraw-override": "PASS",
+        "ddraw-override": "INFO",  # always INFO for this title (COM path; override inert)
         "wrapper": "PASS",
         "ini-window": "PASS",
         "music": "PASS",
@@ -331,7 +331,8 @@ def test_wrapper_digest_mismatch_is_a_warn(
     out = capsys.readouterr().out
     assert "WARN wrapper:" in out
     assert "not ours" in out
-    assert "PASS ddraw-override:" in out  # the DLL being staged still counts
+    assert "INFO ddraw-override:" in out  # staging no longer counts as healthy
+    _assert_inert_sentence(out)
 
 
 @pytest.mark.skipif(WINDOWS, reason="wine check PASSes on Windows (not needed to launch)")
@@ -394,7 +395,7 @@ def test_json_schema_is_stable(
     ids = []
     for check in payload["checks"]:
         assert set(check) == {"id", "status", "detail"}
-        assert check["status"] in ("pass", "fail", "warn")
+        assert check["status"] in ("pass", "fail", "warn", "info")
         ids.append(check["id"])
     assert ids == [
         "install",
@@ -601,10 +602,10 @@ def test_ddraw_override_rejects_non_native(
     monkeypatch.setenv("WINEDLLOVERRIDES", override)
     root = make_install(tmp_path / "install", rewritten=True)  # no wrapper staged
     code = main(["doctor", "--game-dir", str(root)])
-    assert code == 0  # a missing override is a WARN, not a FAIL
+    assert code == 0  # a missing override is INFO, not a FAIL
     out = capsys.readouterr().out
     assert "PASS ddraw-override:" not in out
-    assert "WARN ddraw-override:" in out
+    assert "INFO ddraw-override:" in out
 
 
 def test_ddraw_override_reads_env(
@@ -619,8 +620,33 @@ def test_ddraw_override_reads_env(
     code = main(["doctor", "--game-dir", str(root)])
     assert code == 0
     out = capsys.readouterr().out
-    assert "PASS ddraw-override:" in out
+    assert "INFO ddraw-override:" in out  # configured, but inert for this title
     assert "WINEDLLOVERRIDES" in out
+    assert "CoCreateInstance(CLSID_DirectDraw)" in out
+
+
+def test_ddraw_override_env_and_staged_takes_env_wording(
+    tmp_path: Path,
+    fake_wine,
+    with_display,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """env+staged: the env route is checked first, so it keeps the env wording.
+
+    ``_ddraw_route`` reads ``WINEDLLOVERRIDES`` before looking for a staged
+    ``ddraw.dll``, so when both are in play the line must name the env route --
+    not claim a staged DLL is the configured route.
+    """
+    monkeypatch.setenv("WINEDLLOVERRIDES", "ddraw=n,b")
+    root = make_install(tmp_path / "install", with_wrapper=True, rewritten=True)
+    code = main(["doctor", "--game-dir", str(root)])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "INFO ddraw-override:" in out
+    assert "WINEDLLOVERRIDES" in out  # the env route wins the wording
+    assert "staged next to Disciple.exe" not in out
+    _assert_inert_sentence(out)
 
 
 # --- ini-window: the game's own display mode ----------------------------------
@@ -632,8 +658,25 @@ def test_ddraw_override_reads_env(
 # asserts the check never claims to prevent a crash.
 
 WINDOWED_NEEDS_WRAPPER = (
-    "windowed presentation needs cnc-ddraw; the launcher does not write this key"
+    "windowed presentation is not delivered by this pack for this title: "
+    "the renderer never loads cnc-ddraw (the game asks COM for system32\\ddraw.dll)"
 )
+
+
+INERT_SENTENCE = (
+    "inert for Disciples' renderer: it acquires DirectDraw via "
+    "CoCreateInstance(CLSID_DirectDraw) -> system32\\ddraw.dll (COM), so it does "
+    "not load a staged ddraw.dll and ddraw=n,b only falls back to builtin there "
+    "(the video player's by-name load is untested)"
+)
+
+
+def _assert_inert_sentence(out: str) -> None:
+    """Pin the WHOLE sentence: a prefix match let a garbled join ('so a the ...')
+    ship, and let the unscoped wording back in."""
+    assert INERT_SENTENCE in out
+    assert "so a the" not in out
+    assert "inert for Disciples:" not in out  # unscoped: 'the game', not the renderer
 
 
 def _line_for(out: str, check_id: str) -> str:
@@ -693,6 +736,10 @@ def test_ini_window_fullscreen_is_a_pass(
 
     out = capsys.readouterr().out
     assert "PASS ini-window: [Disciple] InWindow=0" in out
+    # the detail is the only branch a revert could quietly restore a retracted
+    # claim in: pin it like the other three
+    assert "none presents its window" in out
+    assert "cnc-ddraw presents the window" not in out
     assert "WARN ini-window:" not in out
 
 
@@ -722,12 +769,17 @@ def _ini_and_wrapper_lines(capsys: pytest.CaptureFixture[str]) -> tuple[str, str
 
 
 def _assert_no_false_wrapper_claim(ini_line: str) -> None:
+    """The WARN must not claim the wrapper does anything for this title.
+
+    It also must not lie in the other direction: the line may say staging cannot
+    help, and must always tell the reader what the documented baseline is.
+    """
     assert ini_line.startswith("WARN ini-window:")
     assert "no verified cnc-ddraw" in ini_line
     assert "staged" not in ini_line
     assert "provided by the wrapper" not in ini_line
     assert "installed and verified" not in ini_line
-    assert "stage cnc-ddraw next to Disciple.exe" in ini_line
+    assert "does not give the renderer a window" in ini_line
     assert "InWindow=0" in ini_line
 
 
@@ -747,8 +799,8 @@ def test_ini_window_windowed_with_verified_wrapper_still_warns(
     assert wrapper_line.startswith("PASS wrapper:")
     assert ini_line.startswith("WARN ini-window:")
     assert "cnc-ddraw is installed and verified" in ini_line
-    assert "needs the game fullscreen" in ini_line
-    assert "set InWindow=0 in Exe/DISCIPLE.INI" in ini_line
+    assert "renderer never loads it" in ini_line
+    assert "InWindow=0 is the documented baseline" in ini_line
     assert "provided by the wrapper" not in ini_line
 
 
@@ -766,7 +818,10 @@ def test_ini_window_windowed_with_env_override_only_warns_without_wrapper_claim(
 
     ini_line, wrapper_line = _ini_and_wrapper_lines(capsys)
     assert wrapper_line.startswith("WARN wrapper:")
-    assert "cnc-ddraw not installed" in wrapper_line
+    assert "cnc-ddraw not staged" in wrapper_line
+    # the wrapper WARN must not imply that staging it would help this title
+    assert "never loads it" in wrapper_line
+    assert "needs the wrapper install step" not in wrapper_line
     _assert_no_false_wrapper_claim(ini_line)
     assert "WINEDLLOVERRIDES" not in ini_line
 
@@ -844,6 +899,9 @@ def test_ini_window_unrecognised_value_is_a_warn(
     out = capsys.readouterr().out
     assert "WARN ini-window:" in out
     assert "neither 0 nor 1" in out
+    # the fourth place a window promise can hide: no value of the key gives a window
+    assert "no value gives the renderer a wrapper-presented window" in out
+    assert "let cnc-ddraw present the window" not in out
     assert "PASS ini-window:" not in out
 
 

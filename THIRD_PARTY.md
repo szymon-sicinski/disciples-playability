@@ -40,9 +40,11 @@ curl -s https://api.github.com/repos/rootext/disciples-gl-builds | grep -A3 '"li
   the pin in `src/disciples_play/wrapper.py` (`CNC_DDRAW_SHA256`). Those two
   places are the only third-party digests in the repository, and neither is a
   hash of a game file.
-- **`cnc-ddraw` requires the game to be fullscreen** (`InWindow=0`); windowed
-  presentation comes from cnc-ddraw, not from the game's own windowed mode. That
-  ordering is documented wherever the preset is (milestone M3).
+- **`cnc-ddraw` requires the game to be fullscreen** (`InWindow=0`) and presents
+  the window itself — for a title that loads `ddraw.dll` by name. **Disciples:
+  Sacred Lands Gold is not such a title**: it acquires DirectDraw through COM
+  (`system32\ddraw.dll`), so the renderer does not load a staged `ddraw.dll` and this preset
+  cannot engage the renderer (measured; see `docs/wine-recipe.md`).
 - Runtime dependencies of this package are **none** (`dependencies = []` in
   `pyproject.toml`). Development-only tools — `pytest`, `ruff` — are installed
   through the `dev` extra and are not shipped to users.

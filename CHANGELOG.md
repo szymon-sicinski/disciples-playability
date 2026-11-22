@@ -31,14 +31,16 @@ those eleven items are ticked.
 - **`doctor` subcommand** — ten `PASS`/`FAIL`/`WARN` checks (install, INI
   writability, installation paths, wine, `ddraw` override, wrapper, `InWindow`,
   music, video, display) with a fix hint per line and a stable `--json` schema.
+  A fourth status, `INFO`, reports a setting worth knowing that cannot be acted
+  on; it never changes the exit code.
   It is read-only, never prints a game hash, and never rewrites the display key.
 - **`ini-window` guard** — `doctor` warns whenever `[Disciple] InWindow=1`, with
-  or without a wrapper (cnc-ddraw needs the game fullscreen; the wording follows
-  the `wrapper` check's verdict: "installed and verified, but it needs the game
-  fullscreen" vs "no verified cnc-ddraw: windowed presentation needs cnc-ddraw;
-  the launcher does not write this key"), passes only on `InWindow=0`, and
-  warns when the key is absent (retail default unknown). Configuration only: the
-  start-up crash at `0059559E` also happens with `InWindow=0`.
+  or without a wrapper. The wording follows the `wrapper` check's verdict
+  ("installed and verified, but this title's renderer never loads it" vs "no verified
+  cnc-ddraw: windowed presentation is not delivered by this pack for this
+  title"), passes only on `InWindow=0`, and warns when the key is absent (retail
+  default unknown). Configuration only: the start-up crash at `0059559E` also
+  happens with `InWindow=0`.
 - **`data` subcommand** — read-only structural report of the installation:
   directory inventory, dBase III geometry with closing header arithmetic, `MQDB`
   chunk offsets/sizes with competing hypotheses scored, ID cross-reference
@@ -93,8 +95,10 @@ those eleven items are ticked.
 
 ### Verified
 
-- 267 synthetic-fixture tests pass; 2 read-only tests pass against a retail
-  installation; `ruff check` and `ruff format --check` are clean.
+- 269 synthetic-fixture tests pass here (271 with the two permission tests this
+  container cannot run: they need a `chmod` that binds); 2 read-only tests pass
+  against a retail installation; `ruff check` and `ruff format --check` are
+  clean. (The count grows with every change; the current one is in `README.md`.)
 - The launched argv is `wine explorer /desktop=Disciples,640x480 <exe>` by
   default, `wine <exe>` with `--no-virtual-desktop`, and a bad `WxH` is exit `2`
   with one line (unit tests; no Wine needed).
@@ -102,6 +106,11 @@ those eleven items are ticked.
   with that command; the headless rig reached the intro with a 640x480 display
   four different ways and faulted at `0059559E` on a 1920x1440 screen with two
   Wine builds (card `t_2504e165`).
+- Wrapped in `gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer`, the same
+  command gave a centred 1920×1440 window (exactly 3×) with the picture filling
+  it and menu clicks landing on the item under the cursor (maintainer,
+  2026-11-22, KDE Plasma on Wayland). Pixel sharpness, audio and Alt+Tab inside
+  gamescope were not assessed. A recipe, not a launcher flag.
 - `disciples-play data` runs read-only over a retail install: 314 files, 131
   dBase III tables (header arithmetic closes on all), 19 `MQDB` containers.
 - `disciples-play doctor` runs read-only over the retail install, and its
@@ -154,7 +163,7 @@ those eleven items are ticked.
   top-left corner, the rest of the desktop is black, no title bar or border,
   input 1:1. Cause unknown; scaling/upscaling and `InWindow=1` remain
   unsupported.
-- **cnc-ddraw was never loaded in those runs.** Every plain-Wine crash dump names
+- **cnc-ddraw does not appear in those runs.** Every plain-Wine crash dump names
   `C:\windows\system32\ddraw.dll` and `wined3d.dll`; the `ddraw.dll` staged in
   `Exe\` never appears, so nothing here credits the wrapper with the working
   launch.

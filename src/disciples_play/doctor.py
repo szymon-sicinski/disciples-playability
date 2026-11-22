@@ -1,9 +1,9 @@
 """The ``doctor`` subcommand: checkable pass/fail lines for a Disciples install.
 
 ``disciples-play doctor`` turns "does this machine have what the pack needs"
-into one line per check -- ``PASS``/``FAIL``/``WARN`` with a one-line fix hint
--- instead of prose the user has to trust. It closes the last defect of the
-brief ("no reproducible setup"): a second machine is a set of checkable
+into one line per check -- ``PASS``/``FAIL``/``WARN``/``INFO`` with a one-line
+fix hint -- instead of prose the user has to trust. It closes the last defect of
+the brief ("no reproducible setup"): a second machine is a set of checkable
 lines, not a hand-made prefix.
 
 Nothing here reads game content. It reports paths, sizes, counts, versions and
@@ -16,7 +16,7 @@ can never leak into a transcript.
 
 Exit codes (documented in ``docs/cli.md``):
 
-* ``0`` -- every check passed (warnings do not fail the run)
+* ``0`` -- no check failed (WARN and INFO lines do not fail the run)
 * ``1`` -- at least one check failed
 * ``2`` -- bad arguments (no install source specified, or an argparse error)
 
@@ -33,13 +33,15 @@ The checks, in output order:
                  the detail states that plain Wine needs a 640x480-capable
                  display, that the launcher starts the game in a Wine virtual
                  desktop, and that a Proton runner is the other route
-``ddraw-override`` a ``ddraw`` override routes ``ddraw`` to native (env or wrapper)
+``ddraw-override`` reports whether a native-ddraw route is configured (env or
+                 wrapper); always INFO -- the renderer uses COM
+                 (``CoCreateInstance``), so the override is inert for it
 ``wrapper``      cnc-ddraw staged with a marker matching the DLL's digest
 ``ini-window``   ``[Disciple] InWindow`` -- the game's own display mode. ``0`` is
-                 the fullscreen baseline; ``1`` always WARNs, because cnc-ddraw
-                 needs the game itself fullscreen. The wording follows the
-                 ``wrapper`` line's verdict. The doctor never writes the key (it
-                 is the user's choice)
+                 the fullscreen baseline; ``1`` always WARNs, because this title's
+                 renderer never loads a wrapper, so the key cannot buy a window.
+                 The wording follows the ``wrapper`` line's verdict. The doctor never
+                 writes the key (it is the user's choice)
 ``music``        25 ``.wav`` files in ``Music/``
 ``video``        41 ``.smk`` cutscenes (6 ``Video/`` + 35 ``Briefing/``)
 ``display``      an X display is available to verify windowing
@@ -63,6 +65,7 @@ __all__ = ["Check", "Report", "run_doctor"]
 PASS = "pass"
 FAIL = "fail"
 WARN = "warn"
+INFO = "info"
 
 #: The folder names the two installation sections point at, keyed by INI key
 #: (lowercase). This is the same canonical table the INI rewriter uses; the
@@ -82,14 +85,15 @@ _EXPECTED_MUSIC_WAVS = 25
 #: plus 35 in ``Briefing/``.
 _EXPECTED_VIDEO_SMKS = 41
 
-#: What the ``InWindow=1`` WARN without a verified wrapper says: windowed presentation is
-#: the wrapper's job, and the launcher deliberately does not rewrite the display
-#: key -- it is the user's choice, unlike the 21 installation paths. This is a
-#: configuration statement only: the start-up crash at ``0059559E`` that opened
-#: this card also happens with ``InWindow=0``, so display mode is not its cause
-#: and this check makes no claim about crashing.
+#: What every ``InWindow`` warning uses: the title's renderer never loads a
+#: wrapper, so no value of the key can produce a wrapper-presented window, and
+#: the launcher deliberately does not rewrite it -- it is the user's choice,
+#: unlike the 21 installation paths. This is a configuration statement only: the
+#: start-up crash at ``0059559E`` happens with ``InWindow=0`` as well, so the key
+#: is not its cause and this check makes no claim about crashing.
 _WINDOWED_NEEDS_WRAPPER = (
-    "windowed presentation needs cnc-ddraw; the launcher does not write this key"
+    "windowed presentation is not delivered by this pack for this title: "
+    "the renderer never loads cnc-ddraw (the game asks COM for system32\\ddraw.dll)"
 )
 
 #: Values of ``[Disciple] InWindow`` read as "the game makes its own window" and
@@ -101,7 +105,7 @@ _FALSY = ("0", "false", "no", "off")
 
 @dataclass(frozen=True)
 class Check:
-    """One doctor check: a stable id, a pass/fail/warn status and a detail line."""
+    """One doctor check: a stable id, a pass/fail/warn/info status and a detail line."""
 
     id: str
     status: str
@@ -116,7 +120,7 @@ class Report:
 
     @property
     def ok(self) -> bool:
-        """True when no check failed (warnings do not fail the run)."""
+        """True when no check failed (warnings and info do not fail the run)."""
         return all(check.status != FAIL for check in self.checks)
 
     def exit_code(self) -> int:
@@ -390,34 +394,47 @@ def _ddraw_route(exe_dir: Path | None) -> tuple[str | None, str]:
 
 
 def _ddraw_override_check(exe_dir: Path | None) -> Check:
+    """Report the ddraw route as information, never a WARN or FAIL.
+
+    For this title's renderer the override is inert in every route (COM, not a
+    by-name ``LoadLibrary``; the video player's by-name load is untested), so no
+    user action can clear it: a WARN would train users
+    to ignore warnings, and a FAIL would block play on nothing. The detail
+    keeps the measured wording; only the status is informational.
+    """
     kind, detail = _ddraw_route(exe_dir)
-    if kind == "env":
-        return Check("ddraw-override", PASS, detail)
-    if kind == "staged":
+    inert = (
+        "inert for Disciples' renderer: it acquires DirectDraw via "
+        "CoCreateInstance(CLSID_DirectDraw) -> system32\\ddraw.dll (COM), so it does "
+        "not load a staged ddraw.dll and ddraw=n,b only falls back to builtin there "
+        "(the video player's by-name load is untested)"
+    )
+    if kind in ("env", "staged"):
         return Check(
             "ddraw-override",
-            PASS,
-            "ddraw.dll staged next to Disciple.exe; the launcher sets "
-            "WINEDLLOVERRIDES=ddraw=n,b automatically",
+            INFO,
+            f"{detail}, but {inert}; the override only matters for titles that "
+            "LoadLibrary ddraw.dll by name (see docs/wine-recipe.md)",
         )
     return Check(
         "ddraw-override",
-        WARN,
-        'no ddraw override in effect; set WINEDLLOVERRIDES="ddraw=n,b" or '
-        "winecfg -> Libraries -> ddraw -> native,builtin "
-        "(the launcher sets it automatically once cnc-ddraw is staged)",
+        INFO,
+        f"no ddraw override in effect — {inert}; the override only matters for "
+        "titles that LoadLibrary ddraw.dll by name",
     )
 
 
 def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | None) -> Check:
     """Check ``[Disciple] InWindow`` -- whether the *game* makes its own window.
 
-    ``InWindow`` selects the game's **own** window mode; windowed presentation in
-    this pack comes from cnc-ddraw instead, which needs the game itself fullscreen
-    (``docs/verification.md`` requires ``InWindow=0``). So ``InWindow=1`` is a WARN
-    in **every** case, wrapper or not; only ``InWindow=0`` passes. The message
-    follows ``_wrapper_check``'s own verdict ("installed and verified" only when
-    that check passes). A missing key is a WARN too (the retail default is unknown).
+    ``InWindow`` selects the game's **own** window mode. cnc-ddraw is *not* an
+    alternative here: this title acquires DirectDraw through COM, so a staged
+    wrapper is never loaded by the renderer and no value of the key produces one. ``InWindow=1``
+    is therefore a WARN in **every** case, wrapper or not, and only
+    ``InWindow=0`` passes -- it is the recipes' baseline, not a promise of a
+    window. The message follows ``_wrapper_check``'s own verdict ("installed and
+    verified" only when that check passes). A missing key is a WARN too (the
+    retail default is unknown).
 
     This is a configuration guard, **not** a crash guard. The start-up
     ``C0000005`` at ``0059559E`` that opened this work happens with
@@ -443,9 +460,8 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
             "ini-window",
             WARN,
             "DISCIPLE.INI has no [Disciple] InWindow key (the retail default is "
-            f"unknown); {_WINDOWED_NEEDS_WRAPPER} -- set InWindow=0 in "
-            "Exe/DISCIPLE.INI to run the game fullscreen, and stage cnc-ddraw "
-            "next to Disciple.exe when you want a window (docs/wrapper.md)",
+            f"unknown); {_WINDOWED_NEEDS_WRAPPER}; set InWindow=0 in "
+            "Exe/DISCIPLE.INI for the documented baseline (docs/wrapper.md)",
         )
 
     normalised = value.strip().lower()
@@ -454,7 +470,7 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
             "ini-window",
             PASS,
             f"[Disciple] InWindow={value.strip()} (the game fullscreen -- the baseline "
-            "the Wine recipes use; cnc-ddraw presents the window when staged)",
+            "the Wine recipes use; the renderer never loads a wrapper, so none presents its window)",
         )
     if normalised in _TRUTHY:
         # Always a WARN: the verification precondition is InWindow=0. The wording
@@ -465,23 +481,25 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
                 "ini-window",
                 WARN,
                 f"[Disciple] InWindow={value.strip()} (the game makes its own window); "
-                "cnc-ddraw is installed and verified, but it needs the game "
-                "fullscreen: set InWindow=0 in Exe/DISCIPLE.INI (docs/wrapper.md)",
+                "cnc-ddraw is installed and verified, but this title's renderer never loads it "
+                "(COM -> system32\\ddraw.dll): the window is the game's own, and "
+                "InWindow=0 is the documented baseline (docs/wrapper.md)",
             )
         return Check(
             "ini-window",
             WARN,
             f"[Disciple] InWindow={value.strip()} (the game makes its own window) "
-            f"and no verified cnc-ddraw: {_WINDOWED_NEEDS_WRAPPER} -- set "
-            "InWindow=0 in Exe/DISCIPLE.INI to run the game fullscreen, and stage "
-            "cnc-ddraw next to Disciple.exe when you want a window",
+            f"and no verified cnc-ddraw: {_WINDOWED_NEEDS_WRAPPER}; set "
+            "InWindow=0 in Exe/DISCIPLE.INI for the documented baseline -- staging "
+            "cnc-ddraw next to Disciple.exe does not give the renderer a window (it never "
+            "loads it; the video player's by-name load is untested)",
         )
     return Check(
         "ini-window",
         WARN,
         f"[Disciple] InWindow={value.strip()!r} is neither 0 nor 1; use 0 in "
-        "Exe/DISCIPLE.INI to run the game fullscreen and let cnc-ddraw present the "
-        "window",
+        "Exe/DISCIPLE.INI for the documented baseline -- no value gives the renderer "
+        "a wrapper-presented window",
     )
 
 
@@ -494,8 +512,8 @@ def _wrapper_check(root: Path | None, exe_dir: Path | None) -> Check:
         return Check(
             "wrapper",
             WARN,
-            "cnc-ddraw not installed (no ddraw.dll next to Disciple.exe); "
-            "windowed/upscaled presentation needs the wrapper install step",
+            "cnc-ddraw not staged (no ddraw.dll next to Disciple.exe); staging "
+            "it would not change the renderer, which never loads it",
         )
 
     marker = exe_dir / wrapper._MARKER_FILENAME

@@ -4,7 +4,9 @@
 item 1. No agent in this project has a display, so nothing here has been
 observed in-game by an agent. The test suite proves the
 INI rewrite, the CLI contract, the doctor's checks and the data scanner against
-synthetic fixtures (267 tests) plus a read-only pass over the retail install
+synthetic fixtures (269 tests here; 271 with the two permission tests this
+container cannot run, see the command block below) plus a read-only pass over
+the retail install
 (2 tests); it cannot prove the game *plays*.
 
 **Partial result (maintainer, 2026-11-21):** the main menu **was** reached and
@@ -20,7 +22,9 @@ itself (the launcher emits that same argv). The menu responds and the mouse
 cursor lines up with the drawn menu (the pointer sat on QUIT in the screenshot),
 so input is 1:1. Observed appearance: the game's 640×480 surface sits in the
 **top-left corner**, the rest of the desktop is black, no title bar and no
-border; the cause is unknown and the display server type was not measured. Only
+border; the cause is unknown (the session is KDE Plasma on Wayland — reported the
+same day — and `[H]` that Xwayland/KDE treat the fullscreen request differently
+from an ordinary window; not measured). Only
 the 640x480 default has been tried on this machine.
 
 Item 1 still stays unticked: a human has to run it and tick it. Plain `wine`
@@ -42,24 +46,27 @@ export GAME="$HOME/Development/RetroLab/Game files/Disciples Gold"   # your path
 disciples-play doctor --game-dir "$GAME"
 ```
 
-**Items 2–5 precondition:** the wrapper only presents a window when the *game*
-is fullscreen, i.e. `InWindow=0` in `Exe/DISCIPLE.ini`. The launcher never writes
-that key (the 21 installation paths are the only thing it rewrites) and a retail
-install may ship `InWindow=1`, so set it before running items 2–5 — otherwise
-you will record a windowing failure that is a setting, not a defect.
+**Items 2–5 are blocked on something else, not on a setting.** The wrapper can
+only present a window if the game loads it, and the renderer does not: it asks COM
+for DirectDraw and COM resolves `system32\ddraw.dll` (measured — see
+[`wine-recipe.md`](wine-recipe.md) "Known crash at start-up"). So no value of
+`InWindow` makes items 2–5 pass today; they wait on the COM redirect, not on a
+precondition a reader can set.
 
 `doctor` reports the key as its **`ini-window`** line: `PASS` for
-`InWindow=0`, `WARN` for `InWindow=1` in every case (with a verified cnc-ddraw
-it says the wrapper needs the game fullscreen; without one, that windowed
-presentation needs it), `WARN` for a missing key. That WARN is a configuration
+`InWindow=0`, `WARN` for `InWindow=1` in every case, and `WARN` for a missing
+key. With a verified wrapper it says the title's renderer never loads it; without one it
+says windowed presentation is not delivered by this pack. Either way the key is
+your own display choice. That WARN is a configuration
 guard only — it is neither a ticked box nor a claim about the start-up crash.
 
 **The start-up crash is a display-mode crash.** On 2026-11-21 the game died with
-`Exception C0000005` (write to `0x00000000`, EIP `0059559E`) after its own
-start-up log line — with `InWindow=0` **and** `InWindow=1`. On 2026-11-22 the
-same build started inside a 640×480 Wine virtual desktop, and the headless rig
-showed the same split (refused `SetDisplayMode(640,480,8)` without a 640x480
-mode, accepted with one; card `t_2504e165`). The evidence is in
+`Exception C0000005` at `0059559E` after its own start-up log line — with
+`InWindow=0` **and** `InWindow=1`, so the `InWindow` *setting* is ruled out. What
+the trace shows is a `SetDisplayMode(640, 480, 8)` request refused immediately
+before the fault. On 2026-11-22 the same build started inside a 640×480 Wine
+virtual desktop, and the headless rig showed the same split (refused without such
+a mode, accepted with one; card `t_2504e165`). The evidence is in
 [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-without-a-640x480-mode).
 Item 1 cannot be ticked until a human runs the pack's own command and records
 the result (see item 1's note) — the 2026-11-22 run is that observation, not the
@@ -74,10 +81,12 @@ tick.
   Note (2026-11-22): the command this pack's launcher now runs by default **did** reach the menu — `wine explorer /desktop=Disciples,640x480 Disciple.exe` with `InWindow=0` on the maintainer's 2560×1440 desktop (system Wine 11.21), typed at the shell rather than through `disciples-play` itself. The menu responds; the pointer lines up with it, so input is 1:1. The picture occupies the top-left corner and the rest of the desktop is black (cosmetic, cause unknown). The box stays unticked: this is the observation a human must confirm and tick, and only the 640x480 default was tried. Earlier note (2026-11-21): the menu was also reached by pressing Play in **Heroic + Proton-GE** — once with the install's original `X:\…` INI and once with the pack's rewritten `Z:\…` values.
 - [ ] **UNVERIFIED** — **2. Window size.** The wrapper presents the game in a **640×480** window (the pack's base size, not a recorded video mode) and you resize it; record the size you settled on (1920×1440 = exactly 3×, 1280×960 = 2×) and whether the pixels stayed sharp.
   Note: the preset sets no window-size, `boxing` or `shader` key — it writes nine `[ddraw]` keys (`windowed`, `maintas`, `maxfps`, `vsync`, `adjmouse`, `savesettings`, `nonexclusive`, `hook`, `renderer`) and nothing else. Sharp integer scaling needs `boxing=true` or `shader=Nearest neighbor` added to `ddraw.ini` by hand (see [`wrapper.md`](wrapper.md)); record which one you used, because neither is the default.
+  Note (2026-11-22): a cnc-ddraw-resized window was **not** observed — for this title's renderer the wrapper does not load (see the known gaps). The measured path to a bigger window is `gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- wine explorer /desktop=Disciples,640x480 Disciple.exe` (maintainer, KDE Plasma on Wayland, 2560×1440, system Wine 11.21, `InWindow=0`): a 1920×1440 window, centred, with the game picture filling it — exactly 3× the game's 640×480. Whether the pixels stayed **sharp** was not assessed (gamescope's default upscaling filter is not nearest), so that half of this item is still open. Recipe: [`wine-recipe.md`](wine-recipe.md#bigger-window-a-gamescope-recipe-not-something-the-launcher-does). This path replaces the item's cnc-ddraw assumption; the box stays unticked for a human.
 - [ ] **UNVERIFIED** — **3. Alt+Enter and Alt+Tab.** Alt+Enter toggles windowed/fullscreen; Alt+Tab away and back does not corrupt the display.
   Record: both transitions, and whether colours/size survive the round trip.
 - [ ] **UNVERIFIED** — **4. Mouse targeting at 3×.** Clicking a map tile and a menu button hits what is under the cursor at 3× scale; the cursor does not escape to the second monitor.
   Record: the scale you tested at, and whether `adjmouse` / `Ctrl+Tab` unlock changed anything.
+  Note (2026-11-22): at 3× under gamescope (`gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- wine explorer /desktop=Disciples,640x480 Disciple.exe`, maintainer's KDE Plasma/Wayland machine, 2560×1440) **clicking menu items hits the item under the cursor** — mouse targeting at 3× works on that path. Not tested: whether the cursor can escape to a second monitor, and `adjmouse`/`Ctrl+Tab` behaviour (cnc-ddraw does not load for this renderer). The box stays unticked for a human.
 - [ ] **UNVERIFIED** — **5. Palette animation.** Water, fire and the animated cursor animate without stripes or stuck colours (the `PaletteAnim=1` claim).
   This is plan risk **R2**. If it fails, the fallback is `PaletteAnim=0` plus the documented tradeoff, not a code fix.
 - [ ] **UNVERIFIED** — **6. Music and SFX without the CD.** Music plays in-game from the 25 local `Music/*.wav` files with the CD absent; SFX are audible; both volume sliders behave.
@@ -100,10 +109,10 @@ listed here rather than smoothed over; each one is visible to a user.
 
 | Gap | Where it bites | What would close it |
 |---|---|---|
-| **Picture sits in the top-left corner of the virtual desktop.** [V] 2026-11-22, maintainer's desktop (system Wine 11.21, `wine explorer /desktop=Disciples,640x480 Disciple.exe`, `InWindow=0`, 2560×1440 screen): the game's 640×480 surface occupies the top-left corner, the rest of the desktop is black, there is no title bar or border, and input is 1:1 (the pointer lines up with the drawn menu). | Cosmetic, every plain-Wine launch: the game is playable but the window looks unfinished. | Cause **unknown** — not investigated; the display server type was not measured, so do not assume one. Positioning/scaling that surface is future work (gamescope/FSR and `InWindow=1` are also still unsupported). |
+| **Picture sits in the top-left corner of the virtual desktop.** [V] 2026-11-22, maintainer's desktop (system Wine 11.21, `wine explorer /desktop=Disciples,640x480 Disciple.exe`, `InWindow=0`, 2560×1440 screen, KDE Plasma on Wayland): the game's 640×480 surface occupies the top-left corner, the rest of the desktop is black, there is no title bar or border, and input is 1:1 (the pointer lines up with the drawn menu). | Cosmetic, every plain-Wine launch: the game is playable but the window looks unfinished. | Cause **unknown** — not investigated; `[H]` that Xwayland/KDE treat the fullscreen mode request differently from an ordinary window (not measured). A `gamescope` recipe that does fill a centred 1920×1440 window was measured once the same day ([`wine-recipe.md`](wine-recipe.md#bigger-window-a-gamescope-recipe-not-something-the-launcher-does)) but nothing in the pack positions or scales this surface. |
 | **Plain-Wine start-up crash (`0059559E`) without a 640x480 mode.** `Disciple.exe` dies with `C0000005` — a null object from the graphics layer — under plain `wine` (wine-staging 11.21, default prefix) when the display offers no 640x480 resolution: with the wrapper staged and `WINEDLLOVERRIDES=ddraw=n,b`, with no wrapper, and with `InWindow=0` or `InWindow=1`. The rig reproduced both sides (refused `SetDisplayMode(640,480,8)` without such a mode, accepted with one; card `t_2504e165`). | `--no-virtual-desktop` on a display without a 640x480 mode: an access violation instead of a game. | **Closed for the launcher**: it now starts the game in a 640x480 Wine virtual desktop by default (verified on the maintainer's desktop 2026-11-22; rig R5–R7). The mechanism behind the refusal is still `[H]`. `DDraw=0` still starts to a black screen. |
-| **The staged cnc-ddraw was never loaded.** Every plain-Wine crash dump so far lists `system32\ddraw.dll` and `wined3d.dll`; the `ddraw.dll` in `Exe\` never appears, so items 2–5 have no evidence that the wrapper engages at all. | Any windowing/scaling claim: the preset may be inert on this title. | A run whose module list names the staged DLL; if none exists, a loader/hook investigation (upstream `hook` modes) before v0.2 claims windowing. |
-| **No one-line wrapper install.** `disciples_play.wrapper` fetches the pinned `cnc-ddraw` release and writes the preset, but no CLI subcommand calls it yet. | A new user must copy `ddraw.dll`/`ddraw.ini` into `Exe/` by hand (quickstart §"Getting the window"). Without that, `windowed=1` never engages and items 2–5 cannot pass. | A small `disciples-play wrapper --install` card (needs `--game-dir`, the digest pin, the licence text, an overwrite guard — all already implemented as functions). |
+| **The renderer does not load the staged cnc-ddraw.** The game acquires DirectDraw through `CoCreateInstance(CLSID_DirectDraw)`, and COM resolves `HKCR\CLSID\{D7B70EE0-…}\InprocServer32` → `system32\ddraw.dll`; a DLL in `Exe\` is not on that path. Measured. (`SMACKW32.DLL`'s by-name video path is static evidence only and untested.) (The `InprocServer32` redirect named in this row's last column is **untested** — no experiment in the tree attempts it, so nothing here should be read as a ruled-out path.) | Every windowing/scaling claim, and items 2–5 entirely. | Register the DLL as `CLSID_DirectDraw`'s `InprocServer32` in the prefix (the only remaining Wine-side candidate) and re-run; or drop the wrapper from v0.2's claims. |
+| **No one-line wrapper install.** `disciples_play.wrapper` fetches the pinned `cnc-ddraw` release and writes the preset, but no CLI subcommand calls it yet. | Copying `ddraw.dll`/`ddraw.ini` into `Exe/` by hand is the only way to stage it — and for the renderer that changes nothing, because it never loads it (row above; the video player's by-name load is untested). The missing command is a packaging gap, not a path to a window. | A `disciples-play wrapper --install` card (needs `--game-dir`, the digest pin, the licence text, an overwrite guard — all already implemented as functions) — worth doing for the titles that *do* load ddraw by name. |
 | **Windows is unclaimed.** CI runs the suite on `windows-latest` 3.10–3.13, but no human has launched the game on Windows. | Any "works on Windows" reading of a green CI badge. | One run on a Windows machine; then update this file and the README. |
 | **cnc-ddraw's release build writes no debug log.** `dbg_init()` is behind `#ifdef _DEBUG`, so a black screen leaves no `cnc-ddraw-*.log`. | Triage of a failed item 1. | Use the `experimental-debuglog` build for one run, as [`wine-recipe.md`](wine-recipe.md) says. |
 | **`doctor` on a read-only install reports `FAIL ini`.** In the sandbox the retail copy is a read-only bind mount, so "INI not writable" is a true FAIL there; the maintainer's own copy is writable. `ini-paths` also FAILs on the retail INI's relative values until the launcher has rewritten them once. | Reading a `doctor` transcript from someone else's machine as if it were yours. | Run `doctor` on your own machine before and after one launch; the second run should show `ini-paths` PASS. |
@@ -121,7 +130,8 @@ Run at the M6 head on Linux, Python 3.14 (the maintainer's Python 3.10–3.13 is
 covered by CI):
 
 ```bash
-python -m pytest -q                    # 226 passed, 2 skipped (realgame)
+python -m pytest -q                    # 269 passed, 2 skipped (realgame) in a root/container
+                                       # shell; 271 passed where chmod binds (CI)
 DISCIPLES_GAME_DIR="/game-files/Disciples Gold" python -m pytest -q tests/test_realgame.py
                                        # 2 passed, read-only against the retail copy
 ruff check . && ruff format --check .  # clean

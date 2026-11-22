@@ -43,8 +43,22 @@ def isolated_user_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
 
     A test that wants an env var or a config file sets one itself; that is then
     the only thing in play.
+
+    The Wine variables are the same class of leak, and a container image can set
+    them globally (the project's headless rig exports ``WINEDLLOVERRIDES`` to
+    suppress the mono/gecko prompts). ``build_env`` copies the parent
+    environment, so an image-level variable would otherwise make the launcher
+    look like it sets an override the launcher did not set.
     """
-    monkeypatch.delenv("DISCIPLES_GAME_DIR", raising=False)
+    for var in (
+        "DISCIPLES_GAME_DIR",
+        "WINEDLLOVERRIDES",
+        "WINEPREFIX",
+        "WINEARCH",
+        "WINEDEBUG",
+        "WINE_ROOT",
+    ):
+        monkeypatch.delenv(var, raising=False)
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))  # POSIX ``Path.home()``
