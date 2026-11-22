@@ -25,11 +25,14 @@ environment is the problem, not your INI.** Measured by the maintainer on
 | Heroic + Proton-GE, its own prefix, the original `X:\…` INI | **plays** ✅ |
 | Heroic + Proton-GE, its own prefix, **the pack's rewritten INI (21 keys → `Z:\…`)** | **plays** ✅ (re-run 2026-11-21 with the rewrite in place; the install holds a single, unmodified `Exe/Disciple.exe`, the same path the crash dumps name) |
 
-The crash is `mov ecx,[eax] ; call [ecx+0x58]` with `EAX=0` — a null object
-handed back by the graphics layer, i.e. Wine's own `ddraw` never returns a
-usable interface for this title under that prefix. **Nothing in this pack fixes
-that, and nothing here claims it does:** it is a limitation of plain `wine` as
-a launch environment, not a pack defect and not an INI problem.
+The crash is `mov ecx,[eax] ; call [ecx+0x58]` with `EAX=0` — a virtual call
+through a null object. **What precedes it is measured** (see "What the runs on
+plain `wine` showed"): COM does return an interface, `Initialize` and
+`SetCooperativeLevel` succeed, and the game's `SetDisplayMode(640, 480, 8)` is
+refused (`NtUserChangeDisplaySettings` returns `-2`) with the mode left at
+1280x1024x32. **Nothing in this pack fixes that, and nothing here claims it
+does:** it is a limitation of plain `wine` as a launch environment, not a pack
+defect and not an INI problem.
 
 The pack's launcher execs a **single `wine` binary** (override with `--wine`)
 and has no Proton / `STEAM_COMPAT_*` path, so it cannot start the game inside a
@@ -59,8 +62,9 @@ it. Do not credit it with the working run.
 ---
 
 Three ways to get a prefix. Each one ends with the `disciples-play` launcher
-doing the INI rewrite, and — under plain Wine and Bottles — with a `ddraw`
-override that routes DirectDraw to the staged `cnc-ddraw` DLL. Only the Proton
+doing the INI rewrite. Each also mentions the `ddraw` override, because that was
+the design — but for this title the override is **inert** (next paragraph), so
+treat it as a step to skip, not a step that makes anything work. Only the Proton
 path (§3) has actually started this title so far.
 
 The one thing every recipe shares is the **override**. `Disciple.exe` does not
@@ -97,8 +101,8 @@ What the runs on plain `wine` showed:
 Disciple.log   "Midgard (v.2000, 6, 22, 1) started on Sat Nov 21 19:13:04 2026"
                -> the game's own startup code runs, then it dies
 crash          Unhandled page fault on read access to 00000000, EIP 0059559E, EAX=0
-               mov eax,[esi+8] ; mov eax,[eax+8] ; push eax
-               push edx        ; mov ecx,[eax]   ; call [ecx+0x58]
+               mov eax,[esi+8] ; mov eax,[eax+8] ; push edx ; push eax
+               mov ecx,[eax]   ; call [ecx+0x58]
                -> [this+8] is a valid object whose own +8 member is null, and the
                   game calls a virtual method through it with no null check
                -> +0x58 is GetSurfaceDesc on a surface and WaitForVerticalBlank on
@@ -212,8 +216,9 @@ WINEPREFIX=~/.local/share/wineprefixes/disciples wineboot -u
 WINEPREFIX=~/.local/share/wineprefixes/disciples winecfg
 # expected: the winecfg window opens. In the Libraries tab, "New override for
 #           library" -> type "ddraw" -> Add -> Edit -> "Native then Builtin".
-#           (Or skip this: the launcher sets WINEDLLOVERRIDES=ddraw=n,b itself
-#           whenever it finds ddraw.dll staged.)
+#           This is inert for Disciples either way (see the caveat above and
+#           "Known crash at start-up"); the launcher would also set
+#           WINEDLLOVERRIDES=ddraw=n,b itself once a ddraw.dll is staged.
 ```
 
 **1c. DPI.** Leave Wine's DPI at the default 96 — cnc-ddraw owns the scaling,
@@ -339,10 +344,11 @@ already has.
    ```
 
    then press **Play** in Heroic. (To drive Proton directly from a shell instead,
-   set `STEAM_COMPAT_DATA_PATH`, `STEAM_COMPAT_CLIENT_INSTALL_PATH` and
-   `WINEDLLOVERRIDES=ddraw=n,b` and run `proton run Exe/Disciple.exe` — that is
-   the Proton equivalent of the launcher's wine exec; the pack does not do it
-   for you today.)
+   set `STEAM_COMPAT_DATA_PATH` and `STEAM_COMPAT_CLIENT_INSTALL_PATH` and run
+   `proton run Exe/Disciple.exe` — that is the Proton equivalent of the
+   launcher's wine exec, and no `WINEDLLOVERRIDES` is involved: step 2 explains
+   why an override changes nothing here. The pack does not do this for you
+   today.)
 
 ---
 

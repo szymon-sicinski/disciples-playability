@@ -127,9 +127,11 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 > instruction, the failed display-mode change and the open question about the
 > dereferenced object are in `docs/wine-recipe.md`)
 > after the game logged its own start, with `InWindow=1` and `InWindow=0` alike,
-> and a third with the wrapper staged faulted the same way — so display mode is
-> not the cause, and the wrapper does not change it. `DDraw=0` starts to a black
-> screen instead. Still open: a non-wow64 Wine and a different Windows version in
+> and a third with the wrapper staged faulted the same way — so the `InWindow`
+> setting is not the cause, and the wrapper does not change it. What remains
+> open is the 640x480x8 mode request the trace shows being refused immediately
+> before the fault: the setting is ruled out, that request is not. `DDraw=0`
+> starts to a black screen instead. Still open: a non-wow64 Wine and a different Windows version in
 > the prefix. The sequence that does work — rewrite
 > the INI, then start the game from a Proton runner — is
 > [`docs/wine-recipe.md`](docs/wine-recipe.md) "Start here"; the fault itself is

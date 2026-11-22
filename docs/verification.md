@@ -44,8 +44,10 @@ guard only — it is neither a ticked box nor a claim about the start-up crash.
 
 **The start-up crash is separate and unresolved.** On 2026-11-21 the game died
 with `Exception C0000005` at `0059559E` after its own
-start-up log line — with `InWindow=0` **and** `InWindow=1`. Display mode is ruled
-out; the evidence and the open candidates are in
+start-up log line — with `InWindow=0` **and** `InWindow=1`. The `InWindow`
+*setting* is ruled out; the 640x480x8 mode request that the trace shows being
+refused immediately before the fault is a separate, open question. The evidence
+and the open candidates are in
 [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine).
 Item 1 cannot be ticked until the pack's own command is what reaches the menu
 (see item 1's note); a Proton-aware launch path would satisfy that without
