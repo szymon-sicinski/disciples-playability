@@ -1,21 +1,33 @@
 # Verification — what a human must run before v0.1.0 is real
 
-**Status: every item below is UNVERIFIED** — with one partial result recorded
-under item 1. No agent in this project has a display or a Wine runtime, so
-nothing here has been observed in-game by an agent. The test suite proves the
+**Status: every item below is UNVERIFIED** — with partial results recorded under
+item 1. No agent in this project has a display, so nothing here has been
+observed in-game by an agent. The test suite proves the
 INI rewrite, the CLI contract, the doctor's checks and the data scanner against
-synthetic fixtures (226 tests) plus a read-only pass over the retail install
+synthetic fixtures (267 tests) plus a read-only pass over the retail install
 (2 tests); it cannot prove the game *plays*.
 
 **Partial result (maintainer, 2026-11-21):** the main menu **was** reached and
 the game played under **Heroic + Proton-GE** — by pressing Play in Heroic, with
 the install's **original `X:\…` INI** and, in a later run, with **the pack's
-rewritten `Z:\…` values** put in place by `disciples-play --no-launch`. What has
-not worked is the pack's own launch (`disciples-play --game-dir …`) under plain
-`wine`, which crashes at `0059559E`.
-Item 1 stays unticked for that reason. Plain `wine` crashes at start-up for
-this title (`0059559E`, null pointer in the graphics layer); the supported
-sequence is in [`wine-recipe.md`](wine-recipe.md) "Start here".
+rewritten `Z:\…` values** put in place by `disciples-play --no-launch`.
+
+**Partial result (maintainer, 2026-11-22, system Wine 11.21):** the command the
+launcher now runs by default reached the main menu — `wine explorer
+/desktop=Disciples,640x480 Disciple.exe` with `InWindow=0`, typed at the shell
+from the install's `Exe/` on a 2560×1440 screen, not through `disciples-play`
+itself (the launcher emits that same argv). The menu responds and the mouse
+cursor lines up with the drawn menu (the pointer sat on QUIT in the screenshot),
+so input is 1:1. Observed appearance: the game's 640×480 surface sits in the
+**top-left corner**, the rest of the desktop is black, no title bar and no
+border; the cause is unknown and the display server type was not measured. Only
+the 640x480 default has been tried on this machine.
+
+Item 1 still stays unticked: a human has to run it and tick it. Plain `wine`
+crashes at `0059559E` when the display offers no 640x480 mode (that is the
+2026-11-21 run); the launcher's virtual desktop is the pack's answer, and the
+headless rig reproduced both sides (card `t_2504e165`, R1–R7). The recipes are in
+[`wine-recipe.md`](wine-recipe.md) "Start here".
 
 This file is the release's honest boundary. Tick a box **only** after running
 that item on a real machine with the game, and record the machine, the date and
@@ -42,14 +54,16 @@ it says the wrapper needs the game fullscreen; without one, that windowed
 presentation needs it), `WARN` for a missing key. That WARN is a configuration
 guard only — it is neither a ticked box nor a claim about the start-up crash.
 
-**The start-up crash is separate and unresolved.** On 2026-11-21 the game died
-with `Exception C0000005` (write to `0x00000000`, EIP `0059559E`) after its own
-start-up log line — with `InWindow=0` **and** `InWindow=1`. Display mode is ruled
-out; the evidence and the open candidates are in
-[`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine).
-Item 1 cannot be ticked until the pack's own command is what reaches the menu
-(see item 1's note); a Proton-aware launch path would satisfy that without
-resolving `0059559E`.
+**The start-up crash is a display-mode crash.** On 2026-11-21 the game died with
+`Exception C0000005` (write to `0x00000000`, EIP `0059559E`) after its own
+start-up log line — with `InWindow=0` **and** `InWindow=1`. On 2026-11-22 the
+same build started inside a 640×480 Wine virtual desktop, and the headless rig
+showed the same split (refused `SetDisplayMode(640,480,8)` without a 640x480
+mode, accepted with one; card `t_2504e165`). The evidence is in
+[`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-without-a-640x480-mode).
+Item 1 cannot be ticked until a human runs the pack's own command and records
+the result (see item 1's note) — the 2026-11-22 run is that observation, not the
+tick.
 
 ---
 
@@ -57,7 +71,7 @@ resolving `0059559E`.
 
 - [ ] **UNVERIFIED** — **1. Main menu.** `Disciple.exe` reaches the main menu: no black screen, no error dialog.
   Command: `disciples-play --game-dir "$GAME"`. Record: what appeared, and the last 20 lines of terminal output if it did not.
-  Note (2026-11-21): the menu **was** reached, but by pressing Play in **Heroic + Proton-GE** — once with the install's original `X:\…` INI and once with the pack's rewritten `Z:\…` values in place. Not by the command above: under plain `wine` that command crashes at `0059559E` (`C0000005`, null pointer in the graphics layer), with or without the wrapper staged; see [`wine-recipe.md`](wine-recipe.md) "Start here". The box stays unticked until the pack's own command is what reaches the menu on some Wine build or prefix.
+  Note (2026-11-22): the command this pack's launcher now runs by default **did** reach the menu — `wine explorer /desktop=Disciples,640x480 Disciple.exe` with `InWindow=0` on the maintainer's 2560×1440 desktop (system Wine 11.21), typed at the shell rather than through `disciples-play` itself. The menu responds; the pointer lines up with it, so input is 1:1. The picture occupies the top-left corner and the rest of the desktop is black (cosmetic, cause unknown). The box stays unticked: this is the observation a human must confirm and tick, and only the 640x480 default was tried. Earlier note (2026-11-21): the menu was also reached by pressing Play in **Heroic + Proton-GE** — once with the install's original `X:\…` INI and once with the pack's rewritten `Z:\…` values.
 - [ ] **UNVERIFIED** — **2. Window size.** The wrapper presents the game in a **640×480** window (the pack's base size, not a recorded video mode) and you resize it; record the size you settled on (1920×1440 = exactly 3×, 1280×960 = 2×) and whether the pixels stayed sharp.
   Note: the preset sets no window-size, `boxing` or `shader` key — it writes nine `[ddraw]` keys (`windowed`, `maintas`, `maxfps`, `vsync`, `adjmouse`, `savesettings`, `nonexclusive`, `hook`, `renderer`) and nothing else. Sharp integer scaling needs `boxing=true` or `shader=Nearest neighbor` added to `ddraw.ini` by hand (see [`wrapper.md`](wrapper.md)); record which one you used, because neither is the default.
 - [ ] **UNVERIFIED** — **3. Alt+Enter and Alt+Tab.** Alt+Enter toggles windowed/fullscreen; Alt+Tab away and back does not corrupt the display.
@@ -86,7 +100,8 @@ listed here rather than smoothed over; each one is visible to a user.
 
 | Gap | Where it bites | What would close it |
 |---|---|---|
-| **Plain-Wine start-up crash (`0059559E`).** `Disciple.exe` dies with `C0000005` — a null object from the graphics layer — under plain `wine` (wine-staging 11.21, default prefix): with the wrapper staged and `WINEDLLOVERRIDES=ddraw=n,b`, with no wrapper, and with `InWindow=0` or `InWindow=1`. `DDraw=0` starts with sound but a black screen. Heroic + Proton-GE plays. The pack's launcher execs a single `wine` binary and cannot drive Proton. | Following the launcher's own launch on a plain-Wine box (`disciples-play --game-dir …`, no `--no-launch`): an access violation instead of a game. | Nothing in this pack — a Wine-side fix, or a Proton-aware launch path after v0.1.0. Documented workaround: `disciples-play --no-launch`, then Play in Heroic/Lutris ([`wine-recipe.md`](wine-recipe.md) "Start here"). |
+| **Picture sits in the top-left corner of the virtual desktop.** [V] 2026-11-22, maintainer's desktop (system Wine 11.21, `wine explorer /desktop=Disciples,640x480 Disciple.exe`, `InWindow=0`, 2560×1440 screen): the game's 640×480 surface occupies the top-left corner, the rest of the desktop is black, there is no title bar or border, and input is 1:1 (the pointer lines up with the drawn menu). | Cosmetic, every plain-Wine launch: the game is playable but the window looks unfinished. | Cause **unknown** — not investigated; the display server type was not measured, so do not assume one. Positioning/scaling that surface is future work (gamescope/FSR and `InWindow=1` are also still unsupported). |
+| **Plain-Wine start-up crash (`0059559E`) without a 640x480 mode.** `Disciple.exe` dies with `C0000005` — a null object from the graphics layer — under plain `wine` (wine-staging 11.21, default prefix) when the display offers no 640x480 resolution: with the wrapper staged and `WINEDLLOVERRIDES=ddraw=n,b`, with no wrapper, and with `InWindow=0` or `InWindow=1`. The rig reproduced both sides (refused `SetDisplayMode(640,480,8)` without such a mode, accepted with one; card `t_2504e165`). | `--no-virtual-desktop` on a display without a 640x480 mode: an access violation instead of a game. | **Closed for the launcher**: it now starts the game in a 640x480 Wine virtual desktop by default (verified on the maintainer's desktop 2026-11-22; rig R5–R7). The mechanism behind the refusal is still `[H]`. `DDraw=0` still starts to a black screen. |
 | **The staged cnc-ddraw was never loaded.** Every plain-Wine crash dump so far lists `system32\ddraw.dll` and `wined3d.dll`; the `ddraw.dll` in `Exe\` never appears, so items 2–5 have no evidence that the wrapper engages at all. | Any windowing/scaling claim: the preset may be inert on this title. | A run whose module list names the staged DLL; if none exists, a loader/hook investigation (upstream `hook` modes) before v0.2 claims windowing. |
 | **No one-line wrapper install.** `disciples_play.wrapper` fetches the pinned `cnc-ddraw` release and writes the preset, but no CLI subcommand calls it yet. | A new user must copy `ddraw.dll`/`ddraw.ini` into `Exe/` by hand (quickstart §"Getting the window"). Without that, `windowed=1` never engages and items 2–5 cannot pass. | A small `disciples-play wrapper --install` card (needs `--game-dir`, the digest pin, the licence text, an overwrite guard — all already implemented as functions). |
 | **Windows is unclaimed.** CI runs the suite on `windows-latest` 3.10–3.13, but no human has launched the game on Windows. | Any "works on Windows" reading of a green CI badge. | One run on a Windows machine; then update this file and the README. |

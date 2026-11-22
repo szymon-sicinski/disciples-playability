@@ -11,19 +11,21 @@ operates on an installation **you already own**.
 > **Status: v0.1.0 release candidate.** The INI rewriter, the launcher, the
 > cnc-ddraw preset and pinned fetch, the `doctor` subcommand, the Wine recipes
 > and the read-only `data` scanner are implemented and tested on synthetic
-> fixtures. The maintainer's in-game runs (2026-11-21) reached the main menu
-> under **Heroic + Proton-GE**, with the install's original `X:\…` INI and with
-> the pack's **rewritten `Z:\…`** INI — see *What it fixes* below.
-> **What has not worked is the pack's own launch:** `disciples-play --game-dir …`
-> crashes at `0059559E` under plain `wine`. The other ten items in
+> fixtures. The maintainer's in-game runs reached the main menu twice: on
+> 2026-11-21 under **Heroic + Proton-GE** (with the install's original `X:\…`
+> INI and with the pack's **rewritten `Z:\…`** INI) and on 2026-11-22 with
+> **the command the launcher now runs**, typed at the shell: `wine explorer
+> /desktop=Disciples,640x480 Disciple.exe`, plain Wine 11.21 in a 640×480
+> virtual desktop — see *What it fixes* below. The ten other items in
 > [`docs/verification.md`](docs/verification.md) remain **UNVERIFIED**, and the
-> launch item stays unticked because it specifies the pack's command.
+> launch item stays unticked until the maintainer ticks it.
 
 ## What the pack is
 
-The game runs under a **Proton** runner (Heroic, Lutris); plain Wine currently
-crashes at start-up for this title at `0059559E` —
-[`docs/wine-recipe.md`](docs/wine-recipe.md). This is not a compatibility
+The game runs under plain **`wine`** — the launcher starts it in a 640×480 Wine
+virtual desktop, which is what plain Wine needs to get past the start-up crash
+at `0059559E` — or under a **Proton** runner (Heroic, Lutris); both reached the
+main menu. This is not a compatibility
 rescue, it is a portability and reproducibility problem. Upstream [`cnc-ddraw`](https://github.com/FunkyFr3sh/cnc-ddraw)
 (MIT) already provides windowing, scaling and VSync and lists *Disciples*
 among its supported games. What is missing, and what this pack adds:
@@ -41,15 +43,17 @@ what it finds. It does not patch, unpack or redistribute the game; the only copy
 it ever makes is the sibling tree you ask for explicitly with `--ini-mode
 copy-tree`.
 
-**The pack guarantees the INI, not the launch.** Verified by the maintainer on
-2026-11-21 against the real GOG install: under plain `wine` (wine-staging 11.21)
-`Disciple.exe` dies with an access violation at `0059559E`, with or without the
-cnc-ddraw wrapper staged — while **Heroic + Proton-GE** reaches the main menu
-and plays with the install's **original `X:\…` INI**. So the Proton runner is
-what makes it run; nothing here fixes that crash. **The pack's own `Z:\…`
-rewrite also plays** under the same Proton runner (`--no-launch`, then Play in
-Heroic) — so the rewrite is what makes the install portable and the Proton
-runner is what makes it run. See [`docs/wine-recipe.md`](docs/wine-recipe.md). Because the launcher
+**The pack guarantees the INI, not the display.** Verified by the maintainer
+against the real GOG install: under plain `wine` (wine-staging 11.21) without a
+640x480 display mode `Disciple.exe` dies with an access violation at `0059559E`,
+with or without the cnc-ddraw wrapper staged — and the same build reaches the
+main menu inside a 640×480 Wine virtual desktop (2026-11-22), which the launcher
+now starts by default. **Heroic + Proton-GE** is the other verified route: it
+reaches the main menu and plays with the install's **original `X:\…` INI**. The
+pack's own `Z:\…` rewrite also plays under that Proton runner (`--no-launch`,
+then Play in Heroic) — so the rewrite is what makes the install portable and the
+display mode (virtual desktop or Proton) is what makes it run. See
+[`docs/wine-recipe.md`](docs/wine-recipe.md). Because the launcher
 execs a single `wine` binary and cannot start into a Proton prefix, the
 supported sequence is `disciples-play --no-launch --game-dir …` and then
 **Play** in Heroic or Lutris — [`docs/wine-recipe.md`](docs/wine-recipe.md)
@@ -96,18 +100,19 @@ supported sequence is `disciples-play --no-launch --game-dir …` and then
 
 ## Quick start
 
-Requires Python ≥ 3.10, `pipx` (or any Python installer) and a **Proton**
-runner to play (plain Wine crashes at start-up for this title). No
-runtime dependencies.
+Requires Python ≥ 3.10, `pipx` (or any Python installer) and `wine` (or a Proton
+runner). No runtime dependencies.
 
 ```bash
 pipx install .            # from a clone; needs pipx itself (Debian/Ubuntu: sudo apt install pipx;
                           #   else python3 -m pip install --user pipx && ~/.local/bin/pipx ensurepath,
                           #   then open a NEW shell). Or: python3 -m pip install --user .
 disciples-play doctor --game-dir "$HOME/Games/Disciples Gold"
-disciples-play --no-launch --game-dir "$HOME/Games/Disciples Gold"   # rewrite the 21 INI keys
-# then press Play in Heroic / Lutris with a PROTON runner.
-# Plain `wine` crashes at start-up for this title (0059559E) — docs/wine-recipe.md "Start here".
+disciples-play --game-dir "$HOME/Games/Disciples Gold"   # rewrite the 21 INI keys, then
+                                                          # the game starts in a 640x480 Wine
+                                                          # virtual desktop
+# a Proton runner instead: `--no-launch`, then press Play in Heroic / Lutris.
+# display already offers a 640x480 mode: add --no-virtual-desktop.
 ```
 
 **Your files stay yours.** The pack reads your install, rewrites one INI
@@ -122,18 +127,24 @@ the one-line install command is not wired yet — copy `ddraw.dll` and
 `ddraw.ini` from the pinned `v7.1.0.0` release into `Exe/` (it is **not**
 committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
-> **Status: plain-Wine start-up crashes at `0059559E` and is unresolved.** The
-> runs on 2026-11-21 died with `Exception C0000005` (write to `0x00000000`)
-> after the game logged its own start, with `InWindow=1` and `InWindow=0` alike,
-> and a third with the wrapper staged faulted the same way — so display mode is
-> not the cause, and the wrapper does not change it. `DDraw=0` starts to a black
-> screen instead. Still open: a non-wow64 Wine and a different Windows version in
-> the prefix. The sequence that does work — rewrite
-> the INI, then start the game from a Proton runner — is
-> [`docs/wine-recipe.md`](docs/wine-recipe.md) "Start here"; the fault itself is
-> analysed in its
-> ["Known crash at start-up"](docs/wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine)
-> section.
+> **Status: plain Wine needs a 640x480 display mode — the launcher supplies one.**
+> The runs on 2026-11-21 (no such mode available) died with
+> `Exception C0000005` (write to `0x00000000`) after the game logged its own
+> start, with `InWindow=1` and `InWindow=0` alike, and a third with the wrapper
+> staged faulted the same way — so neither the game's own window mode nor the
+> wrapper is the variable. On 2026-11-22 the same build reached the main menu
+> inside `wine explorer /desktop=Disciples,640x480`, which is now the launcher's
+> default (`--virtual-desktop WxH` / `--no-virtual-desktop`). `DDraw=0` starts to
+> a black screen instead. Still open: a non-wow64 Wine, a different Windows
+> version in the prefix, and *why* the 8-bit mode change is refused — `[H]`.
+> The fault is analysed in
+> [`docs/wine-recipe.md`](docs/wine-recipe.md) "Start here", with the rig runs
+> (card `t_2504e165`) and
+> ["Known crash at start-up"](docs/wine-recipe.md#known-crash-at-start-up-0059559e-without-a-640x480-mode).
+>
+> Inside the virtual desktop the picture sits in the top-left corner on a black
+> background — measured, cosmetic, cause unknown
+> ([`docs/verification.md`](docs/verification.md) "Known gaps").
 >
 > `doctor` reports `[Disciple] InWindow` as its `ini-window` line — `PASS` for
 > `0`, `WARN` for `1` in every case (even with a verified cnc-ddraw, which needs
@@ -173,14 +184,19 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 **Not verified — and this list is the honest boundary:**
 
 - All eleven boxes in [`docs/verification.md`](docs/verification.md) are
-  unticked. The launch item is blocked because it specifies this pack's command
-  — the menu *was* reached, through Heroic rather than through this launcher —
-  and the other ten (the 3× window, Alt+Enter/Alt+Tab, mouse targeting, palette
-  animation, music without the CD, save/load, moving the install, `Config.exe`
-  behaviour, a second prefix, cleanliness) await a human run.
-- Plain Wine as a launch environment for this title: it crashes at `0059559E`
-  (maintainer, 2026-11-21, with or without the wrapper staged). The launch
-  that did play was a **Proton** runner.
+  unticked. The launch item now has observations on both routes — the menu *was*
+  reached through Heroic (2026-11-21) and with the command the launcher now runs
+  in a 640×480 Wine virtual desktop (2026-11-22, typed at the shell) — but a
+  human still has to run the launcher itself and tick it; the other ten (the 3×
+  window, Alt+Enter/Alt+Tab, mouse targeting,
+  palette animation, music without the CD, save/load, moving the install,
+  `Config.exe` behaviour, a second prefix, cleanliness) await a human run.
+- Plain Wine without a 640x480 display mode: it crashes at `0059559E`
+  (maintainer, 2026-11-21, with or without the wrapper staged). With the
+  launcher's virtual desktop, or on a display that offers 640x480, it starts.
+- The virtual desktop's presentation: the game's surface sits in the top-left
+  corner and the rest is black (measured 2026-11-22, cause unknown); scaling and
+  the game's own windowed mode (`InWindow=1`) remain unsupported.
 - Windows as a target: CI green is not a play test.
 - The wrapper's one-line install: the module works, the CLI command does not
   exist yet.

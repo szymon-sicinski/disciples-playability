@@ -6,14 +6,18 @@ launcher), and print a read-only structural report of its data files
 
 The launcher resolves the install, re-points `Exe\DISCIPLE.INI` at that
 install's real location (rewriting the 21 stale `X:\…` paths in `[Installation]`
-and `[InstallationClient]`), and launches `wine Exe/Disciple.exe`. All of it
-runs against a game folder **you already own**; this repository ships no game
-data.
+and `[InstallationClient]`), and starts the game under `wine` — by default in a
+Wine virtual desktop of 640×480, because plain Wine on a display that offers no
+640x480 mode has been measured to crash this title at start-up (see
+[`wine-recipe.md`](wine-recipe.md#start-here-plain-wine-needs-a-640x480-display--the-launcher-starts-a-virtual-desktop)).
+All of it runs against a game folder **you already own**; this repository ships
+no game data.
 
 ## Usage
 
 ```
 disciples-play [--game-dir DIR] [--dry-run | --print-command] [--wine PATH]
+               [--virtual-desktop WxH | --no-virtual-desktop]
                [--path-style wine|relative]
                [--ini-mode backup|inplace|copy-tree]
                [--no-launch] [-v | -q]
@@ -28,6 +32,8 @@ disciples-play --version
 | `--dry-run` | Compute the INI rewrite and print the diff + the exact command line + cwd, **without writing or launching**. |
 | `--print-command` | Print the shell-quoted launch command and exit. No writes, no launch. |
 | `--wine PATH` | The wine binary (bare name is looked up on `PATH`). Default: `wine`. |
+| `--virtual-desktop WxH` | Size of the Wine virtual desktop the game runs in. Default `640x480`. `WxH` is validated strictly — two whole numbers in 1…16384, e.g. `800x600` — and anything else exits `2` with one line. Only `640x480` has been observed on a real desktop; the other sizes were exercised in the headless rig only. |
+| `--no-virtual-desktop` | Exec `wine` directly, without a virtual desktop (the behaviour before this option existed). Mutually exclusive with `--virtual-desktop`. |
 | `--path-style {wine,relative}` | How installation paths are written. Default `wine` (absolute Windows paths — the proven-working form). `relative` (bare folder names) is kept for the portability experiment and is currently **falsified** in game; see the plan §7 R1 / §9 Q1. |
 | `--ini-mode {backup,inplace,copy-tree}` | How `DISCIPLE.INI` is updated. Default `backup`. |
 | `--no-launch` | Rewrite the INI but do not start the game. |
@@ -96,9 +102,14 @@ The three modes:
 
 ## Launch
 
-The argv is `wine <install>/Exe/Disciple.exe`, run with working directory
-`<install>/Exe` (the known-good baseline: `Exe/` cwd **plus** absolute INI
-paths). Environment for the child:
+The argv is `wine explorer /desktop=Disciples,640x480 <install>/Exe/Disciple.exe`
+— by default the game runs inside a Wine virtual desktop, because plain Wine on
+a display that offers no 640x480 mode was measured to crash this title at
+start-up (see [`wine-recipe.md`](wine-recipe.md#start-here-plain-wine-needs-a-640x480-display--the-launcher-starts-a-virtual-desktop)).
+`--virtual-desktop WxH` changes the size; `--no-virtual-desktop` restores the
+plain `wine <exe>` argv. Run with working directory `<install>/Exe` (the
+known-good baseline: `Exe/` cwd **plus** absolute INI paths). Environment for
+the child:
 
 * `WINEDLLOVERRIDES=ddraw=n,b` — set only when `ddraw.dll` sits next to the exe
   (the cnc-ddraw wrapper staged by M3). An existing `WINEDLLOVERRIDES` that
@@ -123,7 +134,7 @@ hand-made prefix. The checks, in order:
 | `install` | the install resolves to exactly one `Exe/Disciple.exe` (reports the exe dir) |
 | `ini` | `Exe/DISCIPLE.INI` present and writable |
 | `ini-paths` | all 15 `[Installation]` + 6 `[InstallationClient]` keys are present and each holds an absolute Windows path that resolves to this install, matched **case-insensitively** (the INI's `globals` vs the install's `Globals` is expected). Relative/empty values are a **FAIL** — bare relative names fail in-game with "unable to load fonts" (plan R1/Q1) — as are missing keys and stale paths; extra/unknown keys are a WARN. |
-| `wine` | `wine` present and reports a `--version`. **FAIL** on POSIX when absent (the launcher cannot run without it); PASS "not needed" on Windows. When wine **is** found, the detail also carries a pointer for start-up crashes — "if the game crashes at start-up under plain Wine, use a Proton runner (see docs/wine-recipe.md)". It is a fixed string, not a Proton detection: a `wine --version` string cannot tell Proton from Wine, and a wrong guess would be worse than the hint. |
+| `wine` | `wine` present and reports a `--version`. **FAIL** on POSIX when absent (the launcher cannot run without it); PASS "not needed" on Windows. When wine **is** found, the detail states what was measured: plain Wine reaches this title's menu only when the display offers a 640x480 mode, the launcher now starts the game in a Wine virtual desktop (`--no-virtual-desktop` opts out), and a Proton runner is the other route that works. It is a fixed string, not a Proton detection: a `wine --version` string cannot tell Proton from Wine, and a wrong guess would be worse than the hint. |
 | `ddraw-override` | `WINEDLLOVERRIDES` routes `ddraw` to native (`ddraw=n…` — a bare `ddraw=b`/`ddraw=d`/`ddraw=` does **not** count), or the wrapper is staged next to the exe (which the launcher overrides automatically) |
 | `wrapper` | cnc-ddraw's `ddraw.dll` staged with a marker file matching its digest (mismatch → WARN "not ours, leaving it alone") |
 | `ini-window` | `[Disciple] InWindow`, the game's **own** display mode. `InWindow=0` PASS (the fullscreen baseline; windowed presentation comes from cnc-ddraw). `InWindow=1` **always WARNs**, because cnc-ddraw needs the game itself fullscreen (`InWindow=0` is the precondition in `docs/verification.md`). The wording follows the `wrapper` line's own verdict: when `wrapper` PASSes (installed, digest matches the marker) it says cnc-ddraw is installed and verified but needs the game fullscreen, so set `InWindow=0`; otherwise (no DLL, foreign DLL, bad marker or digest, or only a `WINEDLLOVERRIDES` override) it says there is no verified cnc-ddraw — "windowed presentation needs cnc-ddraw; the launcher does not write this key" — and names the order that works: set `InWindow=0`, then stage cnc-ddraw next to `Disciple.exe` if you want a window (staging alone does not clear the warning; cnc-ddraw presents the window and the game stays fullscreen). A missing key is a WARN (the retail default is unknown). The doctor never writes this key: it is the user's display choice, and the launcher rewrites only the 21 installation paths. This is a configuration guard only — it makes no claim about the start-up crash at `0059559E`, which also happens with `InWindow=0`. |
@@ -221,17 +232,25 @@ disciples-play --game-dir "…/Disciples Gold" --dry-run
 # the exact command, copy-pasteable
 disciples-play --game-dir "…/Disciples Gold" --print-command
 
-# fix the INI and launch under plain wine (crashes at 0059559E for this title)
+# fix the INI and start the game in a 640x480 Wine virtual desktop (the default)
 disciples-play --game-dir "…/Disciples Gold"
 
-# fix the INI only, then press Play in a Proton runner — the documented sequence
+# the same, with a different virtual-desktop size
+disciples-play --game-dir "…/Disciples Gold" --virtual-desktop 800x600
+
+# exec wine directly, no virtual desktop (reproduces the 0059559E crash on a
+# display without a 640x480 mode)
+disciples-play --game-dir "…/Disciples Gold" --no-virtual-desktop
+
+# fix the INI only, then press Play in a Proton runner
 disciples-play --game-dir "…/Disciples Gold" --no-launch
 
 # fix the INI, leave a pristine GOG folder, and launch from the copy
 disciples-play --game-dir "…/Disciples Gold" --ini-mode copy-tree
 ```
 
-For *Disciples: Sacred Lands Gold*, the plain-`wine` launch above ends in an
-access violation at `0059559E`; the pack's launcher has no Proton path, so
-`--no-launch` plus **Play** in Heroic/Lutris with a Proton runner is the
-supported sequence ([`wine-recipe.md`](wine-recipe.md#start-here-plain-wine-crashes-at-start-up--use-a-proton-runner)).
+For *Disciples: Sacred Lands Gold*, plain `wine` reaches the game's main menu
+only when the display offers a 640x480 mode, so the launcher starts the game in
+a Wine virtual desktop ([`wine-recipe.md`](wine-recipe.md#start-here-plain-wine-needs-a-640x480-display--the-launcher-starts-a-virtual-desktop)).
+A Proton runner is the other route that works — `--no-launch` plus **Play** in
+Heroic/Lutris — and is what the 2026-11-21 runs used.
