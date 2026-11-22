@@ -62,8 +62,10 @@ gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- \
 Measured 2026-11-22 (KDE Plasma on Wayland, 2560×1440 monitor, system Wine
 11.21, `InWindow=0`): a **1920×1440** window, centred, with the game picture
 filling it — exactly 3× — and clicking menu items hits the item under the
-cursor. Whether the pixels are sharp, audio, a full session and Alt+Tab inside
-gamescope were **not** assessed. Details and the not-tried list:
+cursor (gamescope 3.16.23.2+). Adding `-F nearest` made the pixel edges more
+visible; the maintainer did not find it better looking, so the recipe keeps the
+default filter. Audio, a full session and Alt+Tab inside gamescope were **not**
+assessed. Details and the not-tried list:
 [`wine-recipe.md`](wine-recipe.md#bigger-window-a-gamescope-recipe-not-something-the-launcher-does).
 There is no `--gamescope` flag; the launcher only chooses the virtual-desktop
 size.

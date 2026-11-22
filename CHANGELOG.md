@@ -109,8 +109,9 @@ those eleven items are ticked.
 - Wrapped in `gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer`, the same
   command gave a centred 1920×1440 window (exactly 3×) with the picture filling
   it and menu clicks landing on the item under the cursor (maintainer,
-  2026-11-22, KDE Plasma on Wayland). Pixel sharpness, audio and Alt+Tab inside
-  gamescope were not assessed. A recipe, not a launcher flag.
+  2026-11-22, KDE Plasma on Wayland, gamescope 3.16.23.2+). `-F nearest` made the
+  pixel edges more visible and was not judged better looking. Audio and Alt+Tab
+  inside gamescope were not assessed. A recipe, not a launcher flag.
 - `disciples-play data` runs read-only over a retail install: 314 files, 131
   dBase III tables (header arithmetic closes on all), 19 `MQDB` containers.
 - `disciples-play doctor` runs read-only over the retail install, and its

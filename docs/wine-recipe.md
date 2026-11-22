@@ -111,19 +111,22 @@ gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- \
 ```
 
 Measured on the maintainer's machine (2026-11-22: KDE Plasma on **Wayland**,
-Nobara 44, 2560×1440 monitor, AMD RX 580, system Wine 11.21, `InWindow=0`):
+Nobara 44, 2560×1440 monitor, AMD RX 580, system Wine 11.21, gamescope
+3.16.23.2+ (gcc 16.1.1), `InWindow=0`):
 
 | Observation | Result |
 |---|---|
 | the window | a **1920×1440** window, centred on the screen, and the game picture **fills** it — 1920×1440 is exactly 3× the game's 640×480 [V] |
 | input | clicking menu items hits the item under the cursor: mouse targeting at 3× works [V] |
 | the menu | appears and responds [V] |
+| the pixels, default filter | the maintainer could not tell by eye whether the scaling looked right [V, subjective] |
+| the pixels, `-F nearest` added | pixel edges are **more visible**; the maintainer did **not** judge it better looking [V, subjective] |
 
-**Not assessed:** whether the pixels are sharp (gamescope's default upscaling
-filter is not nearest; `-F nearest` was not tried), audio, a full play session,
-Alt+Tab or Alt+Enter inside gamescope. **Not tried:** `-f` (fullscreen), a 2×
-scale, an X11 session; the `gamescope` version is not recorded. The launcher
-gains **no** gamescope flag: this is a recipe you type.
+The recipe above keeps gamescope's default filter; `-F nearest` is an option
+for harder pixel edges, a matter of taste. **Not assessed:** audio, a full play
+session, Alt+Tab or Alt+Enter inside gamescope. **Not tried:** `-f`
+(fullscreen), a 2× scale, an X11 session. The launcher gains **no** gamescope
+flag: this is a recipe you type.
 
 Two neighbouring observations from the same session: `wine explorer
 /desktop=Disciples,1280x960` opens its own **1280×960 window** with the
