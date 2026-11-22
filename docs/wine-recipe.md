@@ -221,8 +221,9 @@ WINEPREFIX=~/.local/share/wineprefixes/disciples winecfg
 #           WINEDLLOVERRIDES=ddraw=n,b itself once a ddraw.dll is staged.
 ```
 
-**1c. DPI.** Leave Wine's DPI at the default 96 — cnc-ddraw owns the scaling,
-and a high DPI can blur the game's fixed 640×480 menus. In `winecfg` →
+**1c. DPI.** Leave Wine's DPI at the default 96 — a high DPI can blur the
+game's fixed 640×480 menus. (The usual reason, "cnc-ddraw owns the scaling",
+does not apply here: the wrapper is never loaded.) In `winecfg` →
 Graphics, "Screen resolution" should read **96 dpi**. (Unverified: the safe
 default is documented, not a measured requirement.)
 
@@ -265,8 +266,9 @@ Bottles wraps the same Wine prefix in a GUI. The parts that matter are the
    **"Native, then Builtin"**. This is the `ddraw=n,b` equivalent — inert for
    this title for the reason in the §1 caveat, so do not read it as the fix.
 3. **Locale**: set the bottle locale to `en_US.UTF-8` (the GOG build is
-   English; a mismatch can show empty text). **DPI**: leave at 96 — cnc-ddraw
-   scales, a high DPI blurs the fixed 640×480 menus.
+   English; a mismatch can show empty text). **DPI**: leave at 96 — a high DPI
+   blurs the fixed 640×480 menus (not because cnc-ddraw scales: it never loads
+   here).
 4. From the bottle's **"Run Executable"** (or "Open terminal"), run the pack's
    launcher. That shell already has `wine` pointing at the bottle's runner and
    `WINEPREFIX` set, so the launcher (which execs `wine` from `PATH`) launches

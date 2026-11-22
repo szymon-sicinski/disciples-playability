@@ -142,8 +142,8 @@ until the game's COM server is redirected. See
 > section.
 >
 > `doctor` reports `[Disciple] InWindow` as its `ini-window` line — `PASS` for
-> `0`, `WARN` for `1` in every case (even with a verified cnc-ddraw, which needs
-> the game fullscreen), `WARN` for a missing key. That
+> `0`, `WARN` for `1` in every case (a verified cnc-ddraw does not change that:
+> this title never loads it), `WARN` for a missing key. That
 > line is a **configuration guard** ("windowed presentation is not delivered by
 > this pack for this title"), not a crash fix, and the launcher never rewrites
 > the key: it is your display choice, not a path.

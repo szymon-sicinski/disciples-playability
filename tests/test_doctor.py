@@ -679,6 +679,10 @@ def test_ini_window_fullscreen_is_a_pass(
 
     out = capsys.readouterr().out
     assert "PASS ini-window: [Disciple] InWindow=0" in out
+    # the detail is the only branch a revert could quietly restore a retracted
+    # claim in: pin it like the other three
+    assert "no wrapper can present a window" in out
+    assert "cnc-ddraw presents the window" not in out
     assert "WARN ini-window:" not in out
 
 

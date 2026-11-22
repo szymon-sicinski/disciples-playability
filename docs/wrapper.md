@@ -104,9 +104,12 @@ Notes on two keys a human may want to tune after the first run:
 cnc-ddraw's README is explicit: **the game must be set to fullscreen**
 (`InWindow=0`), and windowed presentation comes from cnc-ddraw, not from the
 game. Running the game's *own* windowed mode alongside cnc-ddraw's windowed
-mode fights it (the game and the wrapper both try to own the window). Keep the
-game fullscreen and let `windowed=1` do the windowing. cnc-ddraw also requires
-a DirectDraw (software) renderer, which this game is.
+mode fights it (the game and the wrapper both try to own the window).
+
+**For a title that loads `ddraw.dll` by name**, keep the game fullscreen and let
+`windowed=1` do the windowing. **Disciples does not** — it asks COM for
+`CLSID_DirectDraw`, so this section is background for the preset, not an
+instruction that changes anything here (see the opening of this file).
 
 ## The Wine override
 
