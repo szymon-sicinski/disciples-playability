@@ -113,7 +113,11 @@ def test_happy_path_rewrites_and_launches(tmp_path: Path, fake_wine, capsys) -> 
     assert b"globals=" + expected.encode("cp1252") in rewritten
     assert (root / "Exe" / "DISCIPLE.INI.orig").read_bytes() == fixture_bytes()
 
-    assert read_argv(fake_wine.argv_file) == [str(root / "Exe" / "Disciple.exe")]
+    assert read_argv(fake_wine.argv_file) == [
+        "explorer",
+        "/desktop=Disciples,640x480",
+        str(root / "Exe" / "Disciple.exe"),
+    ]
     env = read_env(fake_wine.env_file)
     assert env["WINEDLLOVERRIDES"] == "ddraw=n,b"
     assert env["WINEDEBUG"] == "-all"
@@ -170,9 +174,55 @@ def test_print_command_is_copy_pasteable(tmp_path: Path, capsys) -> None:
     assert main(["--game-dir", str(root), "--print-command"]) == 0
 
     out = capsys.readouterr().out.strip()
-    assert shlex.split(out) == ["wine", str(root / "Exe" / "Disciple.exe")]
+    assert shlex.split(out) == [
+        "wine",
+        "explorer",
+        "/desktop=Disciples,640x480",
+        str(root / "Exe" / "Disciple.exe"),
+    ]
     assert (root / "Exe" / "DISCIPLE.INI").read_bytes() == before  # no rewrite
     assert not (root / "Exe" / "DISCIPLE.INI.orig").exists()
+
+
+def test_print_command_custom_virtual_desktop(tmp_path: Path, capsys) -> None:
+    root = make_install(tmp_path / "install")
+    assert main(["--game-dir", str(root), "--print-command", "--virtual-desktop", "800x600"]) == 0
+    out = capsys.readouterr().out.strip()
+    assert "/desktop=Disciples,800x600" in shlex.split(out)
+
+
+def test_print_command_no_virtual_desktop(tmp_path: Path, capsys) -> None:
+    root = make_install(tmp_path / "install")
+    assert main(["--game-dir", str(root), "--print-command", "--no-virtual-desktop"]) == 0
+    out = capsys.readouterr().out.strip()
+    assert shlex.split(out) == ["wine", str(root / "Exe" / "Disciple.exe")]
+
+
+def test_dry_run_command_line_carries_virtual_desktop(tmp_path: Path, capsys) -> None:
+    root = make_install(tmp_path / "install")
+    assert main(["--game-dir", str(root), "--dry-run"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    command = next(line for line in lines if line.startswith("command:"))
+    assert "explorer /desktop=Disciples,640x480" in command
+
+
+@pytest.mark.parametrize("value", ["", "0x0", "640", "axb", "-640x480", "99999x99999"])
+def test_bad_virtual_desktop_exits_2_one_line(tmp_path: Path, capsys, value: str) -> None:
+    root = make_install(tmp_path / "install")
+    # `=` form: a leading `-` value would otherwise be read as an option.
+    assert main(["--game-dir", str(root), "--print-command", f"--virtual-desktop={value}"]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    err_lines = captured.err.splitlines()
+    assert len(err_lines) == 1
+    assert err_lines[0].startswith("disciples-play: ")
+    assert "Traceback" not in captured.err
+
+
+def test_virtual_desktop_and_opt_out_are_mutually_exclusive(tmp_path: Path) -> None:
+    root = make_install(tmp_path / "install")
+    argv = ["--game-dir", str(root), "--print-command", "--virtual-desktop", "640x480"]
+    assert main([*argv, "--no-virtual-desktop"]) == 2
 
 
 # --- install resolution ----------------------------------------------------
@@ -183,7 +233,12 @@ def test_nested_install_one_level_resolves(tmp_path: Path, capsys) -> None:
     make_install(inner)
     assert main(["--game-dir", str(tmp_path / "Games"), "--print-command"]) == 0
     out = capsys.readouterr().out.strip()
-    assert shlex.split(out) == ["wine", str(inner / "Exe" / "Disciple.exe")]
+    assert shlex.split(out) == [
+        "wine",
+        "explorer",
+        "/desktop=Disciples,640x480",
+        str(inner / "Exe" / "Disciple.exe"),
+    ]
 
 
 def test_nested_install_two_levels_resolves(tmp_path: Path, capsys) -> None:
@@ -191,7 +246,12 @@ def test_nested_install_two_levels_resolves(tmp_path: Path, capsys) -> None:
     make_install(inner)
     assert main(["--game-dir", str(tmp_path / "Games"), "--print-command"]) == 0
     out = capsys.readouterr().out.strip()
-    assert shlex.split(out) == ["wine", str(inner / "Exe" / "Disciple.exe")]
+    assert shlex.split(out) == [
+        "wine",
+        "explorer",
+        "/desktop=Disciples,640x480",
+        str(inner / "Exe" / "Disciple.exe"),
+    ]
 
 
 def test_relative_game_dir_produces_absolute_paths(
@@ -323,6 +383,8 @@ def test_env_var_install_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     assert main(["--print-command"]) == 0
     assert shlex.split(capsys.readouterr().out.strip()) == [
         "wine",
+        "explorer",
+        "/desktop=Disciples,640x480",
         str(root / "Exe" / "Disciple.exe"),
     ]
 
@@ -342,6 +404,8 @@ def test_config_file_install_source(
     assert main(["--print-command"]) == 0
     assert shlex.split(capsys.readouterr().out.strip()) == [
         "wine",
+        "explorer",
+        "/desktop=Disciples,640x480",
         str(root / "Exe" / "Disciple.exe"),
     ]
 
@@ -355,6 +419,8 @@ def test_game_dir_flag_beats_env_var(
     assert main(["--game-dir", str(flag_root), "--print-command"]) == 0
     assert shlex.split(capsys.readouterr().out.strip()) == [
         "wine",
+        "explorer",
+        "/desktop=Disciples,640x480",
         str(flag_root / "Exe" / "Disciple.exe"),
     ]
 

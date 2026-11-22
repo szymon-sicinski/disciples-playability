@@ -80,6 +80,22 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="wine binary to use (default: wine on PATH)",
     )
+    desktop = parser.add_mutually_exclusive_group()
+    desktop.add_argument(
+        "--virtual-desktop",
+        metavar="WxH",
+        default=None,
+        help=(
+            "start the game in a Wine virtual desktop of this size (default: 640x480); "
+            "on by default because plain Wine on a display without a 640x480 mode "
+            "has been seen to crash the game at start-up"
+        ),
+    )
+    desktop.add_argument(
+        "--no-virtual-desktop",
+        action="store_true",
+        help="exec wine directly, without a virtual desktop (the pre-change behaviour)",
+    )
     parser.add_argument(
         "--path-style",
         choices=("wine", "relative"),
@@ -210,7 +226,11 @@ def resolve_game_dir(ns: argparse.Namespace) -> str:
     )
 
 
-def _print_dry_run(install: launch.Install, ns: argparse.Namespace) -> None:
+def _print_dry_run(
+    install: launch.Install,
+    ns: argparse.Namespace,
+    virtual_desktop: tuple[int, int] | None,
+) -> None:
     result = launch.compute_rewrite(install, ns.path_style)
     if result.changed == 0:
         print(f"{install.ini_path}: already up to date; nothing to rewrite")
@@ -218,7 +238,7 @@ def _print_dry_run(install: launch.Install, ns: argparse.Namespace) -> None:
         print(f"{install.ini_path}: {result.changed} of 21 installation keys would change:")
         print(launch.format_ini_diff(result.before, result.after))
 
-    cmd = launch.build_launch(install, ns.wine or "wine", ns.verbose)
+    cmd = launch.build_launch(install, ns.wine or "wine", ns.verbose, virtual_desktop)
     print(f"command: {cmd.display}")
     print(f"cwd: {cmd.cwd}")
     overrides = launch.env_overrides(cmd)
@@ -227,15 +247,22 @@ def _print_dry_run(install: launch.Install, ns: argparse.Namespace) -> None:
 
 
 def run(ns: argparse.Namespace) -> int:
+    virtual_desktop: tuple[int, int] | None
+    if ns.no_virtual_desktop:
+        virtual_desktop = None
+    elif ns.virtual_desktop is None:  # option absent; an empty value must still be rejected
+        virtual_desktop = launch.DEFAULT_VIRTUAL_DESKTOP
+    else:
+        virtual_desktop = launch.parse_virtual_desktop(ns.virtual_desktop)
     install = launch.resolve_install(Path(resolve_game_dir(ns)))
 
     if ns.print_command:
-        cmd = launch.build_launch(install, ns.wine or "wine", ns.verbose)
+        cmd = launch.build_launch(install, ns.wine or "wine", ns.verbose, virtual_desktop)
         print(cmd.display)
         return EXIT_OK
 
     if ns.dry_run:
-        _print_dry_run(install, ns)
+        _print_dry_run(install, ns, virtual_desktop)
         return EXIT_OK
 
     result = launch.apply_rewrite(install, ns.path_style, ns.ini_mode)
@@ -245,7 +272,7 @@ def run(ns: argparse.Namespace) -> int:
     if ns.no_launch:
         return EXIT_OK
 
-    cmd = launch.build_launch(result.install, ns.wine or "wine", ns.verbose)
+    cmd = launch.build_launch(result.install, ns.wine or "wine", ns.verbose, virtual_desktop)
     return launch.launch(cmd)
 
 
