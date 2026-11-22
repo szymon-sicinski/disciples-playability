@@ -39,8 +39,8 @@ are given so each number is checkable.
 | Fact | Evidence | Grade |
 |---|---|---|
 | `Disciple.exe` is PE32 i386 with **no** `ddraw`/`dsound` import; direct imports are `SHW32.dll, C4dll-R.dll, mss32.dll, smackw32.dll, WINMM, KERNEL32, USER32, GDI32, ole32, MSVCRT` | PE import-table walk over the install | **V** |
-| `HA312W32.DLL` and `SHW32.DLL` import only `KERNEL32/USER32/GDI32/ADVAPI32` and contain the literal `ddraw.dll` — they `LoadLibrary` it by name | same walk + string scan | **V** |
-| ⇒ a `ddraw.dll` dropped next to the exe plus `WINEDLLOVERRIDES="ddraw=n,b"` intercepts the graphics layer | follows from the two rows above; upstream documents the override | **D** (upstream) |
+| `HA312W32.DLL` and `SHW32.DLL` import only `KERNEL32/USER32/GDI32/ADVAPI32` and contain the literal string `ddraw.dll` | PE import-table walk + string scan | **V** |
+| ~~⇒ a `ddraw.dll` dropped next to the exe plus `WINEDLLOVERRIDES="ddraw=n,b"` intercepts the graphics layer~~ — **retracted, measured false** (2026-11-22): `Disciple.exe` acquires DirectDraw via `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll` (COM), so the staged DLL is never loaded and the override only ever falls back to builtin | headless rig (E5: `ddraw=n` → "class not registered"; the string scan above was right, the "takes over" inference was not) | **V** (falsified) |
 | `Config.exe` imports `KERNEL32, USER32, COMCTL32, VERSION` only — **no ADVAPI32**, so **no registry**: settings are INI-only | PE import walk | **V** |
 | `DISCIPLE.INI`: 4 sections, 41 keys — `[Disciple]` 19, `[CDROM]` 1, `[Installation]` 15, `[InstallationClient]` 6; 21 of them are absolute path values; CRLF line endings | parse + count | **V** |
 | Install ≈ 645 MB (615 MiB): `Video` 240 MB + `Briefing` 238 MB of `.smk`, `Music` 46 MB of **25 `.wav` files** ⇒ music does not need the CD | `du -sb` per dir | **V** |
@@ -53,8 +53,9 @@ are given so each number is checkable.
 | cnc-ddraw requires the **game** to be fullscreen (`InWindow=0`); windowed mode comes from cnc-ddraw, not the game | upstream README, "Important" block | **D** (upstream) |
 
 Consequence for the design: there is no registry to seed, no DirectX installer to
-run, and no CD to fake. The whole playability problem is **one INI file, one DLL
-in the game folder, and one wine prefix**.
+run, and no CD to fake. The whole playability problem is **one INI file and one
+Wine/Proton prefix** — the "one DLL in the game folder" idea (cnc-ddraw) is
+retracted above: the game's COM path means that staged DLL is never loaded.
 
 ## 2. Scope
 
@@ -276,7 +277,7 @@ repo's `docs/verification.md` must ship with them all marked *unverified*.
 | # | Question | Currently | How it gets answered |
 |---|---|---|---|
 | Q1 | Does the game accept relative paths in `[Installation]`? | **H** — relative values resolve against the CWD, not the module dir: bare names fail from `Exe` ("unable to load fonts"), `..\`-prefixed names load fonts but stop on `DB error ..\interf\Tapp.dbf` (case mismatch). Absolute rewriting is the baseline | E1 retracted (two in-game failures, see §7 R1); a case-sensitivity shim is the real Linux fix |
-| Q2 | Which module creates the DirectDraw object — `HA312W32` or `SHW32`? | **H** (both carry the string) | Not needed for v0.1; note it |
+| Q2 | Which module creates the DirectDraw object — `HA312W32` or `SHW32`? | **V** — neither via `LoadLibrary`: measured 2026-11-22, `Disciple.exe` itself calls `CoCreateInstance(CLSID_DirectDraw)` through `ole32` (the renderer lives in `Disciple.exe`); `SHW32.DLL` is SmartHeap, not the graphics layer | resolved in the headless rig; see `docs/wine-recipe.md` "Known crash at start-up" |
 | Q3 | Does the game read `EXE\Disciple.ini` relative to the module path or the CWD? | **H** (string `EXE\Disciple.ini` present) | M2 test once on the host; launcher must not rely on CWD either way |
 | Q4 | Does palette animation survive cnc-ddraw's windowed OpenGL renderer? | **H** | E2 |
 | Q5 | `MQDB` layer table layout (per-entry offsets, compression?) | **H** — magic and version only | M5, by chunk scanning with competing hypotheses scored |

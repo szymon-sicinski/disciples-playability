@@ -1,21 +1,29 @@
 # The cnc-ddraw wrapper (`disciples_play.wrapper`)
 
-`Disciple.exe` is a PE32 i386 binary that does **not** import DirectDraw —
-`HA312W32.DLL` and `SHW32.DLL` call `LoadLibrary("ddraw.dll")` by name. So a
-`ddraw.dll` dropped next to `Disciple.exe`, plus a Wine override that routes
-`ddraw` to that file, takes over the whole graphics layer.
-[cnc-ddraw](https://github.com/FunkyFr3sh/cnc-ddraw) (MIT) is that DLL, and it
-already lists *Disciples* among its supported games. This module turns
+`Disciple.exe` is a PE32 i386 binary that does **not** import DirectDraw, and no
+module in the install `LoadLibrary`s `ddraw.dll` by name. Measured headlessly
+(2026-11-22, see [`wine-recipe.md`](wine-recipe.md) "Known crash at start-up"):
+the game acquires DirectDraw through **`CoCreateInstance(CLSID_DirectDraw)`**
+(`{D7B70EE0-4340-11CF-B063-0020AFC2CD35}`), resolved via the prefix registry's
+`HKCR\CLSID\{…}\InprocServer32 = C:\windows\system32\ddraw.dll` — the COM
+server path, **not** the application-directory DLL search. A `ddraw.dll` dropped
+next to `Disciple.exe` is therefore **never loaded for this title**, and a
+`WINEDLLOVERRIDES=ddraw=n,b` override can only ever fall back to builtin.
+
+[cnc-ddraw](https://github.com/FunkyFr3sh/cnc-ddraw) (MIT) supplies that DLL for
+the *general* mechanism — for titles that `LoadLibrary("ddraw.dll")` by name, a
+`ddraw.dll` next to the executable plus a `ddraw=n,b` override takes over the
+graphics layer. cnc-ddraw lists *Disciples* among its supported games, but that
+listing does not survive the measured COM path above. This module turns
 cnc-ddraw's "unzip by hand and configure per install" into three reproducible
 functions:
 
-> **Measured caveat (maintainer, 2026-11-21):** on the real GOG install the
-> staged `ddraw.dll` was **never loaded** — every plain-Wine crash dump names
-> `C:\windows\system32\ddraw.dll` and `wined3d.dll`.
-> So the takeover described above is unproven for this title, and the wrapper is
-> not credited with any working run. It also does not fix the plain-Wine
+> **Status for this title:** the staged `ddraw.dll` is never loaded, so the
+> wrapper is not credited with any working run and does not fix the plain-Wine
 > start-up crash (`0059559E`) — that is an environment problem; see
-> [`wine-recipe.md`](wine-recipe.md) "Start here".
+> [`wine-recipe.md`](wine-recipe.md) "Start here". The preset and fetch below
+> remain correct for the wrapper they configure; they just cannot take over
+> Disciples' graphics layer, because the COM path bypasses them.
 
 | Function | What it does |
 |---|---|
@@ -27,9 +35,12 @@ functions:
 
 `ddraw.dll` and `ddraw.ini` go in the directory that holds `Disciple.exe` —
 `Exe/` in the GOG layout — never in the install root that also holds
-`Globals/` and `Imgs1/`. That is where the game's `LoadLibrary("ddraw.dll")`
-resolves them, so it is also where `doctor` and the launcher look; a wrapper
-anywhere else is silently inert.
+`Globals/` and `Imgs1/`. That is where `doctor` and the launcher look for a
+staged wrapper, and where a `LoadLibrary("ddraw.dll")`-based title would resolve
+it; a wrapper anywhere else is silently inert. **For this title the staged DLL
+is never loaded regardless of location** — the game acquires DirectDraw via
+`CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll` (COM), not by name —
+so "next to the exe" is the staging convention, not a working takeover.
 
 `install_wrapper()` takes either path and resolves it with
 `wrapper.resolve_exe_dir()`, so both calls below write the same three files
@@ -73,15 +84,16 @@ records the 3× target, 1920×1440).
 
 Notes on two keys a human may want to tune after the first run:
 
-- **`hook=4`** (upstream's own default) is pinned, not `hook=1`, because of how
-  this game is built. `Disciple.exe` does **not** import `ddraw.dll` —
-  `HA312W32.DLL` loads it by name and owns the window. `hook=1` patches only
-  the main executable's import table, so it would patch nothing that draws and
+- **`hook=4`** (upstream's own default) is pinned, not `hook=1`, because
+  `Disciple.exe` does **not** import `ddraw.dll` — it acquires DirectDraw via
+  `CoCreateInstance(CLSID_DirectDraw)`. `hook=1` patches only the main
+  executable's import table, so it would patch nothing that draws and
   `adjmouse`, cursor clipping and the `PeekMessage` filter would silently do
-  nothing. Mode 4 enumerates the loaded modules and patches every *local* one,
-  which is what reaches `HA312W32.DLL`. (cnc-ddraw deliberately skips modules
-  named `Shw32`/`SH33W32` — the "don't hook reshade/swiftshader/mesa" guard —
-  so `SHW32.DLL` is not patched either way.)
+  nothing. Mode 4 enumerates the loaded modules and patches every *local* one.
+  (cnc-ddraw deliberately skips modules named `Shw32`/`SH33W32` — the
+  "don't hook reshade/swiftshader/mesa" guard — so `SHW32.DLL` is not patched
+  either way.) This rationale is moot for this title, where the wrapper is never
+  loaded at all (COM path).
 - **Crisp integer pixels** (`boxing=true`, "windowboxing / integer scaling") or
   `shader=Nearest neighbor` are the knobs for "integer-scaled, not blurry"
   (§8 item 2 of the plan). They are deliberately *not* in the preset so the
@@ -98,17 +110,23 @@ a DirectDraw (software) renderer, which this game is.
 
 ## The Wine override
 
-For cnc-ddraw to be loaded instead of Wine's built-in `ddraw`, the prefix must
-override it. On the command line:
+For a title that `LoadLibrary`s `ddraw.dll` by name, cnc-ddraw is loaded instead
+of Wine's built-in `ddraw` by overriding it in the prefix. On the command line:
 
 ```bash
 WINEDLLOVERRIDES="ddraw=n,b" wine Disciple.exe
 ```
 
-`n` = native (load our `ddraw.dll` from the game folder), `b` = builtin
+`n` = native (load the `ddraw.dll` from the game folder), `b` = builtin
 fallback. The DLL must sit next to `Disciple.exe` — `Exe\` in the GOG layout,
-see [where the two files go](#where-the-two-files-go) — because that is where
-the game's `LoadLibrary("ddraw.dll")` looks.
+see [where the two files go](#where-the-two-files-go).
+
+> **For Disciples this override is inert.** The game acquires DirectDraw through
+> `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll`, so `n` is never
+> reached and the override always falls back to `b` (builtin). It does no harm
+> and is still what the launcher sets when it finds a staged DLL, but it does
+> not make the staged `ddraw.dll` take over. See
+> [`wine-recipe.md`](wine-recipe.md) "Known crash at start-up".
 
 ## Updating the pin
 
@@ -128,6 +146,14 @@ If the digest is stale, `fetch_wrapper` refuses the download on mismatch —
 that refusal is the safety feature working, not a bug.
 
 ## Black screen / won't start
+
+> **This section assumes the wrapper is loaded.** For Disciples it is **not**:
+> the game acquires DirectDraw via `CoCreateInstance(CLSID_DirectDraw)` →
+> `system32\ddraw.dll`, so a staged `ddraw.dll` never runs and none of the
+> `ddraw.ini`/`hook`/`renderer` knobs below take effect for this title. The
+> start-up crash (`0059559E`) is the environment, not the wrapper — see
+> [`wine-recipe.md`](wine-recipe.md) "Start here". The triage steps below stay
+> correct for titles that load cnc-ddraw.
 
 The released `ddraw.dll` (v7.1.0.0) writes **no** debug log — upstream gates
 `dbg_init()` behind `#ifdef _DEBUG`, so the file below only exists when the

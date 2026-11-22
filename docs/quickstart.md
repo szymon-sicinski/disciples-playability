@@ -49,19 +49,18 @@ written, `4` Wine not found. The full contract is in
 
 ## Getting the window (cnc-ddraw)
 
-Windowed, integer-scaled presentation comes from
+Windowed, integer-scaled presentation was planned to come from
 [cnc-ddraw](https://github.com/FunkyFr3sh/cnc-ddraw) (MIT), not from the game.
-Today the pack contains the pinned fetch and preset as the
-`disciples_play.wrapper` module, but **the one-line install command is not
-wired yet**: copy `ddraw.dll` and `ddraw.ini` from the pinned `v7.1.0.0`
-release into the game's `Exe/` folder next to `Disciple.exe` (recipe:
-[`wine-recipe.md`](wine-recipe.md) §1d), keep the game itself fullscreen
-(`InWindow=0` — windowed presentation comes from cnc-ddraw, not from the game's
-own window mode, so `doctor` warns on `InWindow=1` in every case, a wrapper
-staged or not), and
-run the launcher — it sets `WINEDLLOVERRIDES=ddraw=n,b`
-automatically once it finds the DLL. [`wrapper.md`](wrapper.md) documents the
-preset and the digest pin.
+**Measured 2026-11-22: this does not work for Disciples.** The game acquires
+DirectDraw through `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll`
+(COM), so a `ddraw.dll` staged in `Exe/` is **never loaded**, and the
+`WINEDLLOVERRIDES=ddraw=n,b` the launcher sets once it finds the DLL is inert —
+it can only fall back to builtin. The override remains valid for titles that
+`LoadLibrary("ddraw.dll")` by name, but for Disciples it is not a fix, and
+windowed/upscaled presentation is therefore **not delivered by this pack**
+today. Under a Proton runner the game renders through Proton's own DXVK-backed
+ddraw instead ([`wine-recipe.md`](wine-recipe.md) "Known crash at start-up").
+[`wrapper.md`](wrapper.md) documents the preset and the digest pin.
 
 > **Known: the game dies at start-up under plain Wine.** `Exception C0000005` at
 > `0059559E`, the same with `InWindow=0` and `InWindow=1`; see

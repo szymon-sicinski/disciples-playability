@@ -31,7 +31,9 @@ The checks, in output order:
 ``wine``         ``wine`` present and reports a ``--version`` (FAIL on POSIX
                  when absent: the launcher cannot run without it); when found,
                  the detail points at the Proton recipe for start-up crashes
-``ddraw-override`` a ``ddraw`` override routes ``ddraw`` to native (env or wrapper)
+``ddraw-override`` reports whether a native-ddraw route is configured (env or
+                 wrapper); always WARN for this title -- the game uses COM
+                 (``CoCreateInstance``), so the override is inert
 ``wrapper``      cnc-ddraw staged with a marker matching the DLL's digest
 ``ini-window``   ``[Disciple] InWindow`` -- the game's own display mode. ``0`` is
                  the fullscreen baseline; ``1`` always WARNs, because cnc-ddraw
@@ -387,21 +389,23 @@ def _ddraw_route(exe_dir: Path | None) -> tuple[str | None, str]:
 
 def _ddraw_override_check(exe_dir: Path | None) -> Check:
     kind, detail = _ddraw_route(exe_dir)
-    if kind == "env":
-        return Check("ddraw-override", PASS, detail)
-    if kind == "staged":
+    inert = (
+        "inert for Disciples: the game acquires DirectDraw via "
+        "CoCreateInstance(CLSID_DirectDraw) -> system32\\ddraw.dll (COM), so a "
+        "staged ddraw.dll is never loaded and ddraw=n,b only falls back to builtin"
+    )
+    if kind in ("env", "staged"):
         return Check(
             "ddraw-override",
-            PASS,
-            "ddraw.dll staged next to Disciple.exe; the launcher sets "
-            "WINEDLLOVERRIDES=ddraw=n,b automatically",
+            WARN,
+            f"{detail}, but {inert}; the override only matters for titles that "
+            "LoadLibrary ddraw.dll by name (see docs/wine-recipe.md)",
         )
     return Check(
         "ddraw-override",
         WARN,
-        'no ddraw override in effect; set WINEDLLOVERRIDES="ddraw=n,b" or '
-        "winecfg -> Libraries -> ddraw -> native,builtin "
-        "(the launcher sets it automatically once cnc-ddraw is staged)",
+        f"no ddraw override in effect — {inert}; the override only matters for "
+        "titles that LoadLibrary ddraw.dll by name",
     )
 
 

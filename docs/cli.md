@@ -103,7 +103,12 @@ paths). Environment for the child:
 * `WINEDLLOVERRIDES=ddraw=n,b` — set only when `ddraw.dll` sits next to the exe
   (the cnc-ddraw wrapper staged by M3). An existing `WINEDLLOVERRIDES` that
   does not already route `ddraw` to native (`ddraw=n…`) is preserved and
-  appended to.
+  appended to. **Inert for this title:** the game acquires DirectDraw via
+  `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll` (COM), so the
+  override only ever falls back to builtin and the staged DLL is never loaded.
+  The override remains valid for titles that `LoadLibrary("ddraw.dll")` by
+  name, but it is not a fix for Disciples (see
+  [wine-recipe.md](wine-recipe.md)).
 * `WINEDEBUG=-all` — set unless `-v`.
 
 The launcher waits for the game and returns its exit code.
@@ -124,7 +129,7 @@ hand-made prefix. The checks, in order:
 | `ini` | `Exe/DISCIPLE.INI` present and writable |
 | `ini-paths` | all 15 `[Installation]` + 6 `[InstallationClient]` keys are present and each holds an absolute Windows path that resolves to this install, matched **case-insensitively** (the INI's `globals` vs the install's `Globals` is expected). Relative/empty values are a **FAIL** — bare relative names fail in-game with "unable to load fonts" (plan R1/Q1) — as are missing keys and stale paths; extra/unknown keys are a WARN. |
 | `wine` | `wine` present and reports a `--version`. **FAIL** on POSIX when absent (the launcher cannot run without it); PASS "not needed" on Windows. When wine **is** found, the detail also carries a pointer for start-up crashes — "if the game crashes at start-up under plain Wine, use a Proton runner (see docs/wine-recipe.md)". It is a fixed string, not a Proton detection: a `wine --version` string cannot tell Proton from Wine, and a wrong guess would be worse than the hint. |
-| `ddraw-override` | `WINEDLLOVERRIDES` routes `ddraw` to native (`ddraw=n…` — a bare `ddraw=b`/`ddraw=d`/`ddraw=` does **not** count), or the wrapper is staged next to the exe (which the launcher overrides automatically) |
+| `ddraw-override` | reports whether a native-ddraw route is configured (`WINEDLLOVERRIDES` routes `ddraw` to native, or the wrapper is staged next to the exe). It **always WARNs for this title**: the game acquires DirectDraw via `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll` (COM), so `ddraw=n,b` and a staged `ddraw.dll` are inert here — the override only matters for titles that `LoadLibrary("ddraw.dll")` by name |
 | `wrapper` | cnc-ddraw's `ddraw.dll` staged with a marker file matching its digest (mismatch → WARN "not ours, leaving it alone") |
 | `ini-window` | `[Disciple] InWindow`, the game's **own** display mode. `InWindow=0` PASS (the fullscreen baseline; windowed presentation comes from cnc-ddraw). `InWindow=1` **always WARNs**, because cnc-ddraw needs the game itself fullscreen (`InWindow=0` is the precondition in `docs/verification.md`). The wording follows the `wrapper` line's own verdict: when `wrapper` PASSes (installed, digest matches the marker) it says cnc-ddraw is installed and verified but needs the game fullscreen, so set `InWindow=0`; otherwise (no DLL, foreign DLL, bad marker or digest, or only a `WINEDLLOVERRIDES` override) it says there is no verified cnc-ddraw — "windowed presentation needs cnc-ddraw; the launcher does not write this key" — and names the order that works: set `InWindow=0`, then stage cnc-ddraw next to `Disciple.exe` if you want a window (staging alone does not clear the warning; cnc-ddraw presents the window and the game stays fullscreen). A missing key is a WARN (the retail default is unknown). The doctor never writes this key: it is the user's display choice, and the launcher rewrites only the 21 installation paths. This is a configuration guard only — it makes no claim about the start-up crash at `0059559E`, which also happens with `InWindow=0`. |
 | `music` | 25 `.wav` files in `Music/` (count and size only) |

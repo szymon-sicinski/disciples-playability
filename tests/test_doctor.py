@@ -213,7 +213,7 @@ def test_all_pass_exits_zero(
         "ini": "PASS",
         "ini-paths": "PASS",
         "wine": "PASS",
-        "ddraw-override": "PASS",
+        "ddraw-override": "WARN",  # always WARNs for this title (COM path; override inert)
         "wrapper": "PASS",
         "ini-window": "PASS",
         "music": "PASS",
@@ -314,7 +314,8 @@ def test_wrapper_digest_mismatch_is_a_warn(
     out = capsys.readouterr().out
     assert "WARN wrapper:" in out
     assert "not ours" in out
-    assert "PASS ddraw-override:" in out  # the DLL being staged still counts
+    assert "WARN ddraw-override:" in out  # staging no longer counts as healthy
+    assert "inert for Disciples" in out
 
 
 @pytest.mark.skipif(WINDOWS, reason="wine check PASSes on Windows (not needed to launch)")
@@ -602,8 +603,9 @@ def test_ddraw_override_reads_env(
     code = main(["doctor", "--game-dir", str(root)])
     assert code == 0
     out = capsys.readouterr().out
-    assert "PASS ddraw-override:" in out
+    assert "WARN ddraw-override:" in out  # configured, but inert for this title
     assert "WINEDLLOVERRIDES" in out
+    assert "CoCreateInstance(CLSID_DirectDraw)" in out
 
 
 # --- ini-window: the game's own display mode ----------------------------------
