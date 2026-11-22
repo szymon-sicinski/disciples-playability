@@ -11,7 +11,7 @@ contract, documented here and in ``docs/cli.md``:
 * ``3`` -- rewrite refused (INI not writable, copy-tree target exists)
 * ``4`` -- wine not found (launch only)
 
-The ``doctor`` subcommand has its own contract: ``0`` all checks passed, ``1``
+The ``doctor`` subcommand has its own contract: ``0`` no check failed, ``1``
 any check failed, ``2`` bad arguments (see ``docs/cli.md``).
 
 The install may be given three ways, in priority order: ``--game-dir``, the
