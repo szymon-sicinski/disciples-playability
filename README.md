@@ -165,7 +165,7 @@ until the game's COM server is redirected. See
 
 **Verified here** (commands in [`docs/verification.md`](docs/verification.md#what-the-agents-did-verify-for-contrast)):
 
-- 226 synthetic-fixture tests pass; 2 read-only tests pass against a retail
+- 238 synthetic-fixture tests pass; 2 read-only tests pass against a retail
   install; `ruff check` and `ruff format --check` are clean.
 - CI: pytest + ruff on ubuntu-latest and windows-latest, Python 3.10, 3.11,
   3.12, 3.13, plus a `disciples-play --help` smoke test per cell.

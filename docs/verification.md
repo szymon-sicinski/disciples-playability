@@ -4,7 +4,7 @@
 under item 1. No agent in this project has a display or a Wine runtime, so
 nothing here has been observed in-game by an agent. The test suite proves the
 INI rewrite, the CLI contract, the doctor's checks and the data scanner against
-synthetic fixtures (239 tests) plus a read-only pass over the retail install
+synthetic fixtures (238 tests) plus a read-only pass over the retail install
 (2 tests); it cannot prove the game *plays*.
 
 **Partial result (maintainer, 2026-11-21):** the main menu **was** reached and
@@ -91,7 +91,7 @@ listed here rather than smoothed over; each one is visible to a user.
 | Gap | Where it bites | What would close it |
 |---|---|---|
 | **Plain-Wine start-up crash (`0059559E`).** `Disciple.exe` dies with `C0000005` — a null object from the graphics layer — under plain `wine` (wine-staging 11.21, default prefix): with the wrapper staged and `WINEDLLOVERRIDES=ddraw=n,b`, with no wrapper, and with `InWindow=0` or `InWindow=1`. `DDraw=0` starts with sound but a black screen. Heroic + Proton-GE plays. The pack's launcher execs a single `wine` binary and cannot drive Proton. | Following the launcher's own launch on a plain-Wine box (`disciples-play --game-dir …`, no `--no-launch`): an access violation instead of a game. | Nothing in this pack — a Wine-side fix, or a Proton-aware launch path after v0.1.0. Documented workaround: `disciples-play --no-launch`, then Play in Heroic/Lutris ([`wine-recipe.md`](wine-recipe.md) "Start here"). |
-| **The staged cnc-ddraw can never load.** The game acquires DirectDraw through `CoCreateInstance(CLSID_DirectDraw)`, and COM resolves `HKCR\CLSID\{D7B70EE0-…}\InprocServer32` → `system32\ddraw.dll`; a DLL in `Exe\` is not on that path. Measured, including a registry redirect that made Wine follow the staged path instead. | Every windowing/scaling claim, and items 2–5 entirely. | Register the DLL as `CLSID_DirectDraw`'s `InprocServer32` in the prefix (the only remaining Wine-side candidate) and re-run; or drop the wrapper from v0.2's claims. |
+| **The staged cnc-ddraw can never load.** The game acquires DirectDraw through `CoCreateInstance(CLSID_DirectDraw)`, and COM resolves `HKCR\CLSID\{D7B70EE0-…}\InprocServer32` → `system32\ddraw.dll`; a DLL in `Exe\` is not on that path. Measured. (The `InprocServer32` redirect named in this row's last column is **untested** — no experiment in the tree attempts it, so nothing here should be read as a ruled-out path.) | Every windowing/scaling claim, and items 2–5 entirely. | Register the DLL as `CLSID_DirectDraw`'s `InprocServer32` in the prefix (the only remaining Wine-side candidate) and re-run; or drop the wrapper from v0.2's claims. |
 | **No one-line wrapper install.** `disciples_play.wrapper` fetches the pinned `cnc-ddraw` release and writes the preset, but no CLI subcommand calls it yet. | Copying `ddraw.dll`/`ddraw.ini` into `Exe/` by hand is the only way to stage it — and for this title that changes nothing, because the game never loads it (row above). The missing command is a packaging gap, not a path to a window. | A `disciples-play wrapper --install` card (needs `--game-dir`, the digest pin, the licence text, an overwrite guard — all already implemented as functions) — worth doing for the titles that *do* load ddraw by name. |
 | **Windows is unclaimed.** CI runs the suite on `windows-latest` 3.10–3.13, but no human has launched the game on Windows. | Any "works on Windows" reading of a green CI badge. | One run on a Windows machine; then update this file and the README. |
 | **cnc-ddraw's release build writes no debug log.** `dbg_init()` is behind `#ifdef _DEBUG`, so a black screen leaves no `cnc-ddraw-*.log`. | Triage of a failed item 1. | Use the `experimental-debuglog` build for one run, as [`wine-recipe.md`](wine-recipe.md) says. |
@@ -110,7 +110,7 @@ Run at the M6 head on Linux, Python 3.14 (the maintainer's Python 3.10–3.13 is
 covered by CI):
 
 ```bash
-python -m pytest -q                    # 226 passed, 2 skipped (realgame)
+python -m pytest -q                    # 238 passed, 2 skipped (realgame)
 DISCIPLES_GAME_DIR="/game-files/Disciples Gold" python -m pytest -q tests/test_realgame.py
                                        # 2 passed, read-only against the retail copy
 ruff check . && ruff format --check .  # clean

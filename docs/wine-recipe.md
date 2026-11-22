@@ -367,8 +367,10 @@ not the start-up crash above. For any recipe, in this order:
    setting; `doctor`'s `ini-window` line reports the key but cannot promise a
    window.
 2. **Override in effect (for titles that load cnc-ddraw).** `disciples-play
-   doctor --game-dir …` → the `ddraw-override` line. For this title that line
-   always WARNs — the game acquires DirectDraw via
+   doctor --game-dir …` → the `ddraw-override` line. For this title that line is
+   always `INFO` — it cannot fail, and it cannot be cleared by any action, so it
+   does not count against the exit code — because the game acquires DirectDraw
+   via
    `CoCreateInstance(CLSID_DirectDraw)` (COM), so the override and a staged
    `ddraw.dll` are inert and cannot be the cause of a black screen. It only
    matters for titles that `LoadLibrary("ddraw.dll")` by name.

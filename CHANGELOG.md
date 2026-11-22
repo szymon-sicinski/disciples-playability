@@ -27,6 +27,8 @@ those eleven items are ticked.
 - **`doctor` subcommand** — ten `PASS`/`FAIL`/`WARN` checks (install, INI
   writability, installation paths, wine, `ddraw` override, wrapper, `InWindow`,
   music, video, display) with a fix hint per line and a stable `--json` schema.
+  A fourth status, `INFO`, reports a setting worth knowing that cannot be acted
+  on; it never changes the exit code.
   It is read-only, never prints a game hash, and never rewrites the display key.
 - **`ini-window` guard** — `doctor` warns whenever `[Disciple] InWindow=1`, with
   or without a wrapper. The wording follows the `wrapper` check's verdict
@@ -88,8 +90,9 @@ those eleven items are ticked.
 
 ### Verified
 
-- 226 synthetic-fixture tests pass; 2 read-only tests pass against a retail
-  installation; `ruff check` and `ruff format --check` are clean.
+- 226 synthetic-fixture tests pass _at this release_; 2 read-only tests pass
+  against a retail installation; `ruff check` and `ruff format --check` are
+  clean. (The count grows with every change; the current one is in `README.md`.)
 - `disciples-play data` runs read-only over a retail install: 314 files, 131
   dBase III tables (header arithmetic closes on all), 19 `MQDB` containers.
 - `disciples-play doctor` runs read-only over the retail install, and its

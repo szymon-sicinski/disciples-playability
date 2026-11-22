@@ -99,7 +99,7 @@ Notes on two keys a human may want to tune after the first run:
   (§8 item 2 of the plan). They are deliberately *not* in the preset so the
   default stays minimal; both are within the allowed key set.
 
-## Why the game must stay fullscreen
+## Why the game must stay fullscreen (for a title that loads `ddraw.dll` by name)
 
 cnc-ddraw's README is explicit: **the game must be set to fullscreen**
 (`InWindow=0`), and windowed presentation comes from cnc-ddraw, not from the

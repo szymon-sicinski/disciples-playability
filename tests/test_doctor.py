@@ -748,7 +748,6 @@ def _assert_no_false_wrapper_claim(ini_line: str) -> None:
     assert "installed and verified" not in ini_line
     assert "cannot give this title a window" in ini_line
     assert "InWindow=0" in ini_line
-    assert "InWindow=0" in ini_line
 
 
 def test_ini_window_windowed_with_verified_wrapper_still_warns(
