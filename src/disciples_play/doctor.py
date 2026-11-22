@@ -1,9 +1,9 @@
 """The ``doctor`` subcommand: checkable pass/fail lines for a Disciples install.
 
 ``disciples-play doctor`` turns "does this machine have what the pack needs"
-into one line per check -- ``PASS``/``FAIL``/``WARN`` with a one-line fix hint
--- instead of prose the user has to trust. It closes the last defect of the
-brief ("no reproducible setup"): a second machine is a set of checkable
+into one line per check -- ``PASS``/``FAIL``/``WARN``/``INFO`` with a one-line
+fix hint -- instead of prose the user has to trust. It closes the last defect of
+the brief ("no reproducible setup"): a second machine is a set of checkable
 lines, not a hand-made prefix.
 
 Nothing here reads game content. It reports paths, sizes, counts, versions and
@@ -32,7 +32,7 @@ The checks, in output order:
                  when absent: the launcher cannot run without it); when found,
                  the detail points at the Proton recipe for start-up crashes
 ``ddraw-override`` reports whether a native-ddraw route is configured (env or
-                 wrapper); always WARN for this title -- the game uses COM
+                 wrapper); always INFO for this title -- the game uses COM
                  (``CoCreateInstance``), so the override is inert
 ``wrapper``      cnc-ddraw staged with a marker matching the DLL's digest
 ``ini-window``   ``[Disciple] InWindow`` -- the game's own display mode. ``0`` is
@@ -63,6 +63,7 @@ __all__ = ["Check", "Report", "run_doctor"]
 PASS = "pass"
 FAIL = "fail"
 WARN = "warn"
+INFO = "info"
 
 #: The folder names the two installation sections point at, keyed by INI key
 #: (lowercase). This is the same canonical table the INI rewriter uses; the
@@ -102,7 +103,7 @@ _FALSY = ("0", "false", "no", "off")
 
 @dataclass(frozen=True)
 class Check:
-    """One doctor check: a stable id, a pass/fail/warn status and a detail line."""
+    """One doctor check: a stable id, a pass/fail/warn/info status and a detail line."""
 
     id: str
     status: str
@@ -117,7 +118,7 @@ class Report:
 
     @property
     def ok(self) -> bool:
-        """True when no check failed (warnings do not fail the run)."""
+        """True when no check failed (warnings and info do not fail the run)."""
         return all(check.status != FAIL for check in self.checks)
 
     def exit_code(self) -> int:
@@ -389,6 +390,13 @@ def _ddraw_route(exe_dir: Path | None) -> tuple[str | None, str]:
 
 
 def _ddraw_override_check(exe_dir: Path | None) -> Check:
+    """Report the ddraw route as information, never a WARN or FAIL.
+
+    For this title the override is inert in every route (COM, not a by-name
+    ``LoadLibrary``), so no user action can clear it: a WARN would train users
+    to ignore warnings, and a FAIL would block play on nothing. The detail
+    keeps the measured wording; only the status is informational.
+    """
     kind, detail = _ddraw_route(exe_dir)
     inert = (
         "inert for Disciples: the game acquires DirectDraw via "
@@ -398,13 +406,13 @@ def _ddraw_override_check(exe_dir: Path | None) -> Check:
     if kind in ("env", "staged"):
         return Check(
             "ddraw-override",
-            WARN,
+            INFO,
             f"{detail}, but {inert}; the override only matters for titles that "
             "LoadLibrary ddraw.dll by name (see docs/wine-recipe.md)",
         )
     return Check(
         "ddraw-override",
-        WARN,
+        INFO,
         f"no ddraw override in effect — {inert}; the override only matters for "
         "titles that LoadLibrary ddraw.dll by name",
     )
