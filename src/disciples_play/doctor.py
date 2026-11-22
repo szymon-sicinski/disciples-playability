@@ -32,8 +32,8 @@ The checks, in output order:
                  when absent: the launcher cannot run without it); when found,
                  the detail points at the Proton recipe for start-up crashes
 ``ddraw-override`` reports whether a native-ddraw route is configured (env or
-                 wrapper); always INFO for this title -- the game uses COM
-                 (``CoCreateInstance``), so the override is inert
+                 wrapper); always INFO -- the renderer uses COM
+                 (``CoCreateInstance``), so the override is inert for it
 ``wrapper``      cnc-ddraw staged with a marker matching the DLL's digest
 ``ini-window``   ``[Disciple] InWindow`` -- the game's own display mode. ``0`` is
                  the fullscreen baseline; ``1`` always WARNs, because this title's

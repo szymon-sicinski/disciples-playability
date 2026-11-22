@@ -63,7 +63,7 @@ it. Do not credit it with the working run.
 
 Three ways to get a prefix. Each one ends with the `disciples-play` launcher
 doing the INI rewrite. Each also mentions the `ddraw` override, because that was
-the design — but for this title the override is **inert** (next paragraph), so
+the design — but for the renderer the override is **inert** (next paragraph), so
 treat it as a step to skip, not a step that makes anything work. Only the Proton
 path (§3) has actually started this title so far.
 
@@ -73,10 +73,10 @@ import DirectDraw, and its renderer does not `LoadLibrary` `ddraw.dll` by name
 [`wrapper.md`](wrapper.md)) — the renderer acquires DirectDraw through **`CoCreateInstance(CLSID_DirectDraw)`**, which
 resolves to the prefix's `system32\ddraw.dll` via the COM registry entry (see
 "Known crash at start-up" below). A `ddraw.dll` dropped next to `Disciple.exe`
-plus a `ddraw=n,b` override is therefore **not** able to take over the graphics
-layer for this title — the renderer never loads the native DLL. `n` = native (load our
-DLL), `b` = builtin fallback; for this title the override can only ever fall back
-to `b`. See [`wrapper.md`](wrapper.md) and the `doctor` subcommand for checking
+plus a `ddraw=n,b` override is therefore **not** able to take over the renderer's
+graphics layer — the renderer never loads the native DLL. `n` = native (load our
+DLL), `b` = builtin fallback; for the renderer the override can only ever fall
+back to `b`. See [`wrapper.md`](wrapper.md) and the `doctor` subcommand for checking
 that the override is at least in effect:
 
 ```bash
@@ -196,7 +196,7 @@ The simplest path: one prefix, one override, done. The override can be set two
 ways — per-run via `WINEDLLOVERRIDES` (the launcher does this automatically
 once the wrapper is staged), or permanently via `winecfg`.
 
-> **For this title the override cannot engage, and this is measured.** The game
+> **For the renderer the override cannot engage.** The game
 > acquires DirectDraw through `CoCreateInstance(CLSID_DirectDraw)`, which COM
 > resolves to the prefix's `system32\ddraw.dll` — a registry path, not the
 > app-directory search an override redirects (see "Known crash at start-up").
@@ -231,8 +231,8 @@ Graphics, "Screen resolution" should read **96 dpi**. (Unverified: the safe
 default is documented, not a measured requirement.)
 
 **1d. Stage cnc-ddraw, then launch.** In the recipe as designed cnc-ddraw must
-sit next to `Disciple.exe` before the override does anything — for this title it
-the renderer does not load it either way (see the caveat above). The pack's `disciples_play.wrapper` module
+sit next to `Disciple.exe` before the override does anything — but the renderer
+does not load it either way (see the caveat above). The pack's `disciples_play.wrapper` module
 fetches the pinned release and installs it (see
 [`wrapper.md`](wrapper.md)); until that is wired to a one-line command, do the
 same by hand: download cnc-ddraw `v7.1.0.0` and copy `ddraw.dll` (and

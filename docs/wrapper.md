@@ -24,12 +24,13 @@ listing does not survive the measured COM path above. This module turns
 cnc-ddraw's "unzip by hand and configure per install" into three reproducible
 functions:
 
-> **Status for this title:** the renderer never loads the staged `ddraw.dll`, so the
+> **Status for the renderer:** it never loads the staged `ddraw.dll`, so the
 > wrapper is not credited with any working run and does not fix the plain-Wine
 > start-up crash (`0059559E`) — that is an environment problem; see
 > [`wine-recipe.md`](wine-recipe.md) "Start here". The preset and fetch below
 > remain correct for the wrapper they configure; they just cannot take over
-> Disciples' graphics layer, because the COM path bypasses them.
+> the renderer's graphics layer, because the COM path bypasses them (the video
+> player's by-name load is untested).
 
 | Function | What it does |
 |---|---|
@@ -99,8 +100,8 @@ Notes on two keys a human may want to tune after the first run:
   nothing. Mode 4 enumerates the loaded modules and patches every *local* one.
   (cnc-ddraw deliberately skips modules named `Shw32`/`SH33W32` — the
   "don't hook reshade/swiftshader/mesa" guard — so `SHW32.DLL` is not patched
-  either way.) This rationale is moot for this title, where the wrapper is never
-  loaded at all (COM path).
+  either way.) This rationale is moot for the renderer, which never loads the
+  wrapper (COM path).
 - **Crisp integer pixels** (`boxing=true`, "windowboxing / integer scaling") or
   `shader=Nearest neighbor` are the knobs for "integer-scaled, not blurry"
   (§8 item 2 of the plan). They are deliberately *not* in the preset so the
@@ -160,8 +161,8 @@ that refusal is the safety feature working, not a bug.
 
 > **This section assumes the wrapper is loaded.** For Disciples it is **not**:
 > the game acquires DirectDraw via `CoCreateInstance(CLSID_DirectDraw)` →
-> `system32\ddraw.dll`, so a staged `ddraw.dll` never runs and none of the
-> `ddraw.ini`/`hook`/`renderer` knobs below take effect for this title. The
+> `system32\ddraw.dll`, so the renderer never loads a staged `ddraw.dll` and none of the
+> `ddraw.ini`/`hook`/`renderer` knobs below take effect for it. The
 > start-up crash (`0059559E`) is the environment, not the wrapper — see
 > [`wine-recipe.md`](wine-recipe.md) "Start here". The triage steps below stay
 > correct for titles that load cnc-ddraw.

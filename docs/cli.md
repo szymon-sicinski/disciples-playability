@@ -103,7 +103,7 @@ paths). Environment for the child:
 * `WINEDLLOVERRIDES=ddraw=n,b` — set only when `ddraw.dll` sits next to the exe
   (the cnc-ddraw wrapper staged by M3). An existing `WINEDLLOVERRIDES` that
   does not already route `ddraw` to native (`ddraw=n…`) is preserved and
-  appended to. **Inert for this title:** the game acquires DirectDraw via
+  appended to. **Inert for the renderer:** the game acquires DirectDraw via
   `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll` (COM), so the
   override only ever falls back to builtin for the renderer, which does not load
   the staged DLL (the video player's by-name load is untested).
