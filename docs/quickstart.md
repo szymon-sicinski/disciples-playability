@@ -58,8 +58,10 @@ DirectDraw through `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll`
 it can only fall back to builtin. The override remains valid for titles that
 `LoadLibrary("ddraw.dll")` by name, but for Disciples it is not a fix, and
 windowed/upscaled presentation is therefore **not delivered by this pack**
-today. Under a Proton runner the game renders through Proton's own DXVK-backed
-ddraw instead ([`wine-recipe.md`](wine-recipe.md) "Known crash at start-up").
+today. **Why the same title starts under a Proton runner is not measured** —
+and it is not a different ddraw implementation (DXVK provides Direct3D, not
+`IDirectDraw`); see [`wine-recipe.md`](wine-recipe.md) "Start here" for what is
+known and what is open.
 [`wrapper.md`](wrapper.md) documents the preset and the digest pin.
 
 > **Known: the game dies at start-up under plain Wine.** `Exception C0000005` at

@@ -189,6 +189,14 @@ The simplest path: one prefix, one override, done. The override can be set two
 ways — per-run via `WINEDLLOVERRIDES` (the launcher does this automatically
 once the wrapper is staged), or permanently via `winecfg`.
 
+> **For this title the override cannot engage, and this is measured.** The game
+> acquires DirectDraw through `CoCreateInstance(CLSID_DirectDraw)`, which COM
+> resolves to the prefix's `system32\ddraw.dll` — a registry path, not the
+> app-directory search an override redirects (see "Known crash at start-up").
+> Steps 1b and 1d below are therefore the recipe as designed, not a working
+> path for Disciples: staging the DLL and setting the override changes nothing
+> here.
+
 **1a. Create the prefix and boot it once** (this installs the Wine runtime into
 the prefix; it must run once before the game):
 
@@ -213,8 +221,9 @@ and a high DPI can blur the game's fixed 640×480 menus. In `winecfg` →
 Graphics, "Screen resolution" should read **96 dpi**. (Unverified: the safe
 default is documented, not a measured requirement.)
 
-**1d. Stage cnc-ddraw, then launch.** cnc-ddraw must sit next to `Disciple.exe`
-before the override does anything. The pack's `disciples_play.wrapper` module
+**1d. Stage cnc-ddraw, then launch.** In the recipe as designed cnc-ddraw must
+sit next to `Disciple.exe` before the override does anything — for this title it
+is never loaded either way (see the caveat above). The pack's `disciples_play.wrapper` module
 fetches the pinned release and installs it (see
 [`wrapper.md`](wrapper.md)); until that is wired to a one-line command, do the
 same by hand: download cnc-ddraw `v7.1.0.0` and copy `ddraw.dll` (and
@@ -248,8 +257,8 @@ Bottles wraps the same Wine prefix in a GUI. The parts that matter are the
    works — the template only pre-tunes libraries this game does not need).
 2. Open the bottle → **Settings → Components / Dependencies** (the name varies
    by Bottles version) → add a **DLL override** for `ddraw` set to
-   **"Native, then Builtin"**. This is the `ddraw=n,b` equivalent; it is the
-   one override the game needs.
+   **"Native, then Builtin"**. This is the `ddraw=n,b` equivalent — inert for
+   this title for the reason in the §1 caveat, so do not read it as the fix.
 3. **Locale**: set the bottle locale to `en_US.UTF-8` (the GOG build is
    English; a mismatch can show empty text). **DPI**: leave at 96 — cnc-ddraw
    scales, a high DPI blurs the fixed 640×480 menus.
