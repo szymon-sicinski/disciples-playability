@@ -118,7 +118,7 @@ game data is shipped. Full walk-through:
 
 A **window** is what the pack is built to deliver, and today it does not: the
 game asks COM for DirectDraw (`system32\ddraw.dll`), so a `ddraw.dll` staged in
-`Exe/` is never loaded (`docs/wine-recipe.md` "Known crash at start-up"). The
+`Exe/` is not what the renderer loads (`docs/wine-recipe.md` "Known crash at start-up"). The
 preset, the pinned `v7.1.0.0` fetch and the install function all exist as
 `disciples_play.wrapper`; they are exercised and tested, and they cannot engage
 until the game's COM server is redirected. See
@@ -143,7 +143,7 @@ until the game's COM server is redirected. See
 >
 > `doctor` reports `[Disciple] InWindow` as its `ini-window` line — `PASS` for
 > `0`, `WARN` for `1` in every case (a verified cnc-ddraw does not change that:
-> this title never loads it), `WARN` for a missing key. That
+> this title's renderer never loads it), `WARN` for a missing key. That
 > line is a **configuration guard** ("windowed presentation is not delivered by
 > this pack for this title"), not a crash fix, and the launcher never rewrites
 > the key: it is your display choice, not a path.

@@ -32,7 +32,7 @@ those eleven items are ticked.
   It is read-only, never prints a game hash, and never rewrites the display key.
 - **`ini-window` guard** — `doctor` warns whenever `[Disciple] InWindow=1`, with
   or without a wrapper. The wording follows the `wrapper` check's verdict
-  ("installed and verified, but this title never loads it" vs "no verified
+  ("installed and verified, but this title's renderer never loads it" vs "no verified
   cnc-ddraw: windowed presentation is not delivered by this pack for this
   title"), passes only on `InWindow=0`, and warns when the key is absent (retail
   default unknown). Configuration only: the start-up crash at `0059559E` also
@@ -135,7 +135,7 @@ those eleven items are ticked.
   binary (`--wine` overrides it) and has no `STEAM_COMPAT_*` path, so the
   supported sequence is `disciples-play --no-launch --game-dir …` and then
   **Play** in Heroic or Lutris ([`docs/wine-recipe.md`](docs/wine-recipe.md#start-here-plain-wine-crashes-at-start-up--use-a-proton-runner)).
-- **cnc-ddraw was never loaded in those runs.** Every plain-Wine crash dump names
+- **cnc-ddraw does not appear in those runs.** Every plain-Wine crash dump names
   `C:\windows\system32\ddraw.dll` and `wined3d.dll`; the `ddraw.dll` staged in
   `Exe\` never appears, so nothing here credits the wrapper with the working
   launch.

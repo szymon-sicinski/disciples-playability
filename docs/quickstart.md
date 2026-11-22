@@ -53,7 +53,7 @@ Windowed, integer-scaled presentation was planned to come from
 [cnc-ddraw](https://github.com/FunkyFr3sh/cnc-ddraw) (MIT), not from the game.
 **Measured 2026-11-22: this does not work for Disciples.** The game acquires
 DirectDraw through `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll`
-(COM), so a `ddraw.dll` staged in `Exe/` is **never loaded**, and the
+(COM), so the renderer does not load a `ddraw.dll` staged in `Exe/`, and the
 `WINEDLLOVERRIDES=ddraw=n,b` the launcher sets once it finds the DLL is inert —
 it can only fall back to builtin. The override remains valid for titles that
 `LoadLibrary("ddraw.dll")` by name, but for Disciples it is not a fix, and

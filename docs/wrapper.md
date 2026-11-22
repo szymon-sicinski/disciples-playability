@@ -1,14 +1,20 @@
 # The cnc-ddraw wrapper (`disciples_play.wrapper`)
 
-`Disciple.exe` is a PE32 i386 binary that does **not** import DirectDraw, and no
-module in the install `LoadLibrary`s `ddraw.dll` by name. Measured headlessly
-(2026-11-22, see [`wine-recipe.md`](wine-recipe.md) "Known crash at start-up"):
-the game acquires DirectDraw through **`CoCreateInstance(CLSID_DirectDraw)`**
+`Disciple.exe` is a PE32 i386 binary that does **not** import DirectDraw. Its
+renderer does not `LoadLibrary` `ddraw.dll` by name either; one other module in
+the install does — `SMACKW32.DLL` (the Smacker video player) calls
+`LoadLibraryA("DDRAW.DLL")` and `GetProcAddress("DirectDrawCreate")` (static:
+strings and import-table resolution, not an observed load; that path has not
+been exercised). Measured headlessly (2026-11-22, see
+[`wine-recipe.md`](wine-recipe.md) "Known crash at start-up"): the renderer
+acquires DirectDraw through **`CoCreateInstance(CLSID_DirectDraw)`**
 (`{D7B70EE0-4340-11CF-B063-0020AFC2CD35}`), resolved via the prefix registry's
 `HKCR\CLSID\{…}\InprocServer32 = C:\windows\system32\ddraw.dll` — the COM
 server path, **not** the application-directory DLL search. A `ddraw.dll` dropped
-next to `Disciple.exe` is therefore **never loaded for this title**, and a
-`WINEDLLOVERRIDES=ddraw=n,b` override can only ever fall back to builtin.
+next to `Disciple.exe` is therefore **not what the renderer loads**, and a
+`WINEDLLOVERRIDES=ddraw=n,b` override cannot redirect the renderer — it can
+only fall back to builtin there. Whether the video player's by-name load picks
+the staged DLL up is untested.
 
 [cnc-ddraw](https://github.com/FunkyFr3sh/cnc-ddraw) (MIT) supplies that DLL for
 the *general* mechanism — for titles that `LoadLibrary("ddraw.dll")` by name, a
@@ -18,7 +24,7 @@ listing does not survive the measured COM path above. This module turns
 cnc-ddraw's "unzip by hand and configure per install" into three reproducible
 functions:
 
-> **Status for this title:** the staged `ddraw.dll` is never loaded, so the
+> **Status for this title:** the renderer never loads the staged `ddraw.dll`, so the
 > wrapper is not credited with any working run and does not fix the plain-Wine
 > start-up crash (`0059559E`) — that is an environment problem; see
 > [`wine-recipe.md`](wine-recipe.md) "Start here". The preset and fetch below
@@ -37,9 +43,10 @@ functions:
 `Exe/` in the GOG layout — never in the install root that also holds
 `Globals/` and `Imgs1/`. That is where `doctor` and the launcher look for a
 staged wrapper, and where a `LoadLibrary("ddraw.dll")`-based title would resolve
-it; a wrapper anywhere else is silently inert. **For this title the staged DLL
-is never loaded regardless of location** — the game acquires DirectDraw via
-`CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll` (COM), not by name —
+it; a wrapper anywhere else is silently inert. **For this title the renderer
+does not load the staged DLL, wherever it sits** — it acquires DirectDraw via
+`CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll` (COM), not by name
+(the video player's by-name path is untested) —
 so "next to the exe" is the staging convention, not a working takeover.
 
 `install_wrapper()` takes either path and resolves it with

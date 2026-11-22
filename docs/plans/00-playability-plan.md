@@ -40,7 +40,7 @@ are given so each number is checkable.
 |---|---|---|
 | `Disciple.exe` is PE32 i386 with **no** `ddraw`/`dsound` import; direct imports are `SHW32.dll, C4dll-R.dll, mss32.dll, smackw32.dll, WINMM, KERNEL32, USER32, GDI32, ole32, MSVCRT` | PE import-table walk over the install | **V** |
 | `HA312W32.DLL` and `SHW32.DLL` import only `KERNEL32/USER32/GDI32/ADVAPI32` and contain the literal string `ddraw.dll` | PE import-table walk + string scan | **V** |
-| ~~⇒ a `ddraw.dll` dropped next to the exe plus `WINEDLLOVERRIDES="ddraw=n,b"` intercepts the graphics layer~~ — **retracted, measured false** (2026-11-22): `Disciple.exe` acquires DirectDraw via `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll` (COM), so the staged DLL is never loaded and the override only ever falls back to builtin | headless rig (E5: `ddraw=n` → "class not registered"; the string scan above was right, the "takes over" inference was not) | **V** (falsified) |
+| ~~⇒ a `ddraw.dll` dropped next to the exe plus `WINEDLLOVERRIDES="ddraw=n,b"` intercepts the graphics layer~~ — **retracted, measured false** (2026-11-22): `Disciple.exe` acquires DirectDraw via `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll` (COM), so the renderer does not load the staged DLL and the override only ever falls back to builtin | headless rig (E5: `ddraw=n` → "class not registered"; the string scan found a by-name `ddraw.dll` string but attributed it to the wrong module — it is in `SMACKW32.DLL`'s `.text` (video; static evidence only, untested) — and the "takes over" inference was not right) | **V** (falsified) |
 | `Config.exe` imports `KERNEL32, USER32, COMCTL32, VERSION` only — **no ADVAPI32**, so **no registry**: settings are INI-only | PE import walk | **V** |
 | `DISCIPLE.INI`: 4 sections, 41 keys — `[Disciple]` 19, `[CDROM]` 1, `[Installation]` 15, `[InstallationClient]` 6; 21 of them are absolute path values; CRLF line endings | parse + count | **V** |
 | Install ≈ 645 MB (615 MiB): `Video` 240 MB + `Briefing` 238 MB of `.smk`, `Music` 46 MB of **25 `.wav` files** ⇒ music does not need the CD | `du -sb` per dir | **V** |
@@ -55,7 +55,7 @@ are given so each number is checkable.
 Consequence for the design: there is no registry to seed, no DirectX installer to
 run, and no CD to fake. The whole playability problem is **one INI file and one
 Wine/Proton prefix** — the "one DLL in the game folder" idea (cnc-ddraw) is
-retracted above: the game's COM path means that staged DLL is never loaded.
+retracted above: the game's COM path means that staged DLL is not the one the renderer loads.
 
 ## 2. Scope
 

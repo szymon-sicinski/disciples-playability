@@ -642,7 +642,7 @@ def test_ddraw_override_env_and_staged_takes_env_wording(
 
 WINDOWED_NEEDS_WRAPPER = (
     "windowed presentation is not delivered by this pack for this title: "
-    "cnc-ddraw is never loaded (the game asks COM for system32\\ddraw.dll)"
+    "the renderer never loads cnc-ddraw (the game asks COM for system32\\ddraw.dll)"
 )
 
 
@@ -766,7 +766,7 @@ def test_ini_window_windowed_with_verified_wrapper_still_warns(
     assert wrapper_line.startswith("PASS wrapper:")
     assert ini_line.startswith("WARN ini-window:")
     assert "cnc-ddraw is installed and verified" in ini_line
-    assert "this title never loads it" in ini_line
+    assert "renderer never loads it" in ini_line
     assert "InWindow=0 is the documented baseline" in ini_line
     assert "provided by the wrapper" not in ini_line
 

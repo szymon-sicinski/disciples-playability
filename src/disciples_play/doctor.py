@@ -36,9 +36,9 @@ The checks, in output order:
                  (``CoCreateInstance``), so the override is inert
 ``wrapper``      cnc-ddraw staged with a marker matching the DLL's digest
 ``ini-window``   ``[Disciple] InWindow`` -- the game's own display mode. ``0`` is
-                 the fullscreen baseline; ``1`` always WARNs, because this title
-                 never loads a wrapper, so the key cannot buy a window. The
-                 wording follows the ``wrapper`` line's verdict. The doctor never
+                 the fullscreen baseline; ``1`` always WARNs, because this title's
+                 renderer never loads a wrapper, so the key cannot buy a window.
+                 The wording follows the ``wrapper`` line's verdict. The doctor never
                  writes the key (it is the user's choice)
 ``music``        25 ``.wav`` files in ``Music/``
 ``video``        41 ``.smk`` cutscenes (6 ``Video/`` + 35 ``Briefing/``)
@@ -83,15 +83,15 @@ _EXPECTED_MUSIC_WAVS = 25
 #: plus 35 in ``Briefing/``.
 _EXPECTED_VIDEO_SMKS = 41
 
-#: What every ``InWindow`` warning uses: the title never loads a wrapper, so no
-#: value of the key can produce a window, and the launcher deliberately does not
+#: What every ``InWindow`` warning uses: the title's renderer never loads a
+#: wrapper, so no value of the key can produce a window, and the launcher deliberately does not
 #: rewrite it -- it is the user's choice, unlike the 21 installation paths. This
 #: is a configuration statement only: the start-up crash at ``0059559E`` happens
 #: with ``InWindow=0`` as well, so the key is not its cause and this check makes
 #: no claim about crashing.
 _WINDOWED_NEEDS_WRAPPER = (
     "windowed presentation is not delivered by this pack for this title: "
-    "cnc-ddraw is never loaded (the game asks COM for system32\\ddraw.dll)"
+    "the renderer never loads cnc-ddraw (the game asks COM for system32\\ddraw.dll)"
 )
 
 #: Values of ``[Disciple] InWindow`` read as "the game makes its own window" and
@@ -401,7 +401,8 @@ def _ddraw_override_check(exe_dir: Path | None) -> Check:
     inert = (
         "inert for Disciples: the game acquires DirectDraw via "
         "CoCreateInstance(CLSID_DirectDraw) -> system32\\ddraw.dll (COM), so a "
-        "staged ddraw.dll is never loaded and ddraw=n,b only falls back to builtin"
+        "the renderer does not load a staged ddraw.dll and ddraw=n,b only falls back "
+        "to builtin"
     )
     if kind in ("env", "staged"):
         return Check(
@@ -423,7 +424,7 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
 
     ``InWindow`` selects the game's **own** window mode. cnc-ddraw is *not* an
     alternative here: this title acquires DirectDraw through COM, so a staged
-    wrapper is never loaded and no value of the key produces one. ``InWindow=1``
+    wrapper is never loaded by the renderer and no value of the key produces one. ``InWindow=1``
     is therefore a WARN in **every** case, wrapper or not, and only
     ``InWindow=0`` passes -- it is the recipes' baseline, not a promise of a
     window. The message follows ``_wrapper_check``'s own verdict ("installed and
@@ -475,7 +476,7 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
                 "ini-window",
                 WARN,
                 f"[Disciple] InWindow={value.strip()} (the game makes its own window); "
-                "cnc-ddraw is installed and verified, but this title never loads it "
+                "cnc-ddraw is installed and verified, but this title's renderer never loads it "
                 "(COM -> system32\\ddraw.dll): the window is the game's own, and "
                 "InWindow=0 is the documented baseline (docs/wrapper.md)",
             )
@@ -506,7 +507,7 @@ def _wrapper_check(root: Path | None, exe_dir: Path | None) -> Check:
             "wrapper",
             WARN,
             "cnc-ddraw not staged (no ddraw.dll next to Disciple.exe); staging "
-            "it would not help this title -- the game never loads it",
+            "it would not help this title -- its renderer never loads it",
         )
 
     marker = exe_dir / wrapper._MARKER_FILENAME

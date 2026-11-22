@@ -4,8 +4,8 @@ Disciples: Sacred Lands Gold does not import DirectDraw itself: it calls
 ``CoCreateInstance(CLSID_DirectDraw)``, and COM resolves that through the
 prefix's ``HKCR\\CLSID\\{D7B70EE0-...}\\InprocServer32`` -- a registry path to
 ``system32\\ddraw.dll``, **not** the application-directory search. A
-``ddraw.dll`` dropped next to ``Disciple.exe`` is therefore never loaded for
-this title, and ``WINEDLLOVERRIDES="ddraw=n,b"`` can only fall back to builtin
+``ddraw.dll`` dropped next to ``Disciple.exe`` is therefore not what the renderer
+loads, and ``WINEDLLOVERRIDES="ddraw=n,b"`` can only fall back to builtin
 (measured; see ``docs/wine-recipe.md``). `cnc-ddraw
 <https://github.com/FunkyFr3sh/cnc-ddraw>`_ (MIT) supplies the DLL and the
 windowed, upscaled presentation this pack is built to deliver -- the mechanism
@@ -216,7 +216,8 @@ def build_preset(
     ``Disciple.exe`` does not import ``ddraw`` -- it asks COM for
     ``CLSID_DirectDraw`` -- so the narrow ``hook=1`` (patch only the main
     executable's import table) would patch nothing that draws, and for this
-    title no hook mode applies at all: the DLL is never loaded. Mode 4 enumerates the loaded modules
+    title no hook mode applies at all: the renderer never loads the DLL. Mode 4 enumerates the
+    loaded modules
     and patches every *local* one, which is what carries ``adjmouse``, cursor
     clipping and the ``PeekMessage`` filter to the DLL that owns the window.
 

@@ -101,7 +101,7 @@ def test_preset_header_does_not_promise_what_this_title_cannot_deliver() -> None
     """The header ships into the user's ``ddraw.ini``; keep it honest.
 
     Disciples acquires DirectDraw through COM (``system32\\ddraw.dll``), so this
-    preset is never loaded by it. The file must not claim that the window comes
+    preset is never loaded by its renderer. The file must not claim that the window comes
     from the wrapper -- that claim was measured false (docs/wine-recipe.md), and
     a user reading their own ``ddraw.ini`` is the last place it should resurface.
     """
