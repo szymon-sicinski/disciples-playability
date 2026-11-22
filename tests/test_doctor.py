@@ -786,7 +786,10 @@ def test_ini_window_windowed_with_env_override_only_warns_without_wrapper_claim(
 
     ini_line, wrapper_line = _ini_and_wrapper_lines(capsys)
     assert wrapper_line.startswith("WARN wrapper:")
-    assert "cnc-ddraw not installed" in wrapper_line
+    assert "cnc-ddraw not staged" in wrapper_line
+    # the wrapper WARN must not imply that staging it would help this title
+    assert "never loads it" in wrapper_line
+    assert "needs the wrapper install step" not in wrapper_line
     _assert_no_false_wrapper_claim(ini_line)
     assert "WINEDLLOVERRIDES" not in ini_line
 
@@ -864,6 +867,9 @@ def test_ini_window_unrecognised_value_is_a_warn(
     out = capsys.readouterr().out
     assert "WARN ini-window:" in out
     assert "neither 0 nor 1" in out
+    # the fourth place a window promise can hide: no value of the key gives a window
+    assert "no value gives this title a window" in out
+    assert "let cnc-ddraw present the window" not in out
     assert "PASS ini-window:" not in out
 
 

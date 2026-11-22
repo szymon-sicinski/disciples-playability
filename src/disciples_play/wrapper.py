@@ -318,8 +318,8 @@ def fetch_wrapper(
 def resolve_exe_dir(target: str | os.PathLike[str]) -> Path:
     """Return the directory holding ``Disciple.exe`` -- where the wrapper goes.
 
-    ``ddraw.dll`` is loaded by ``LoadLibrary("ddraw.dll")`` from the game's own
-    DLLs, which resolves against the *running executable's directory*: ``Exe/``
+    For a title that loads ``ddraw.dll`` by name, it resolves against the
+    *running executable's directory*: ``Exe/``
     on the GOG layout, not the install root that holds ``Globals/`` and
     ``Imgs1/``. A wrapper written anywhere else is inert, so this never invents
     a directory -- it resolves one of two shapes and refuses everything else:
