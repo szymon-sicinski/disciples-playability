@@ -30,7 +30,9 @@ The checks, in output order:
                  to this install (relative/empty values are a FAIL -- plan R1)
 ``wine``         ``wine`` present and reports a ``--version`` (FAIL on POSIX
                  when absent: the launcher cannot run without it); when found,
-                 the detail points at the Proton recipe for start-up crashes
+                 the detail states that plain Wine needs a 640x480-capable
+                 display, that the launcher starts the game in a Wine virtual
+                 desktop, and that a Proton runner is the other route
 ``ddraw-override`` a ``ddraw`` override routes ``ddraw`` to native (env or wrapper)
 ``wrapper``      cnc-ddraw staged with a marker matching the DLL's digest
 ``ini-window``   ``[Disciple] InWindow`` -- the game's own display mode. ``0`` is
@@ -363,8 +365,10 @@ def _wine_check(wine_name: str) -> Check:
     return Check(
         "wine",
         PASS,
-        f"{wine_name} {version} ({wine_path}); if the game crashes at start-up "
-        "under plain Wine, use a Proton runner (see docs/wine-recipe.md)",
+        f"{wine_name} {version} ({wine_path}); plain Wine reaches this title's menu only "
+        "when the display offers a 640x480 mode, so the launcher now starts the game in a "
+        "Wine virtual desktop (--no-virtual-desktop opts out); a Proton runner is the other "
+        "route that works (see docs/wine-recipe.md)",
     )
 
 

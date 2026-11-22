@@ -222,8 +222,25 @@ def test_all_pass_exits_zero(
     }
     assert "25 .wav files in Music/" in out
     assert "wine-9.0 (synthetic)" in out
-    assert "use a Proton runner (see docs/wine-recipe.md)" in out
     assert "41 .smk files" in out
+
+
+WINE_PASS_DETAIL = (
+    "wine wine-9.0 (synthetic) (/fake/wine); plain Wine reaches this title's menu only when "
+    "the display offers a 640x480 mode, so the launcher now starts the game in a Wine virtual "
+    "desktop (--no-virtual-desktop opts out); a Proton runner is the other route that works "
+    "(see docs/wine-recipe.md)"
+)
+
+
+def test_wine_pass_detail_is_pinned(
+    tmp_path: Path, fake_wine, with_display, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = make_install(tmp_path / "install", with_wrapper=True, rewritten=True)
+    assert main(["doctor", "--game-dir", str(root), "--json"]) == 0
+    checks = {c["id"]: c for c in json.loads(capsys.readouterr().out)["checks"]}
+    assert checks["wine"]["status"] == "pass"
+    assert checks["wine"]["detail"] == WINE_PASS_DETAIL
 
 
 def test_missing_exe_is_a_fail(
