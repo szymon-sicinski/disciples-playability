@@ -103,7 +103,13 @@ paths). Environment for the child:
 * `WINEDLLOVERRIDES=ddraw=n,b` — set only when `ddraw.dll` sits next to the exe
   (the cnc-ddraw wrapper staged by M3). An existing `WINEDLLOVERRIDES` that
   does not already route `ddraw` to native (`ddraw=n…`) is preserved and
-  appended to.
+  appended to. **Inert for the renderer:** the game acquires DirectDraw via
+  `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll` (COM), so the
+  override only ever falls back to builtin for the renderer, which does not load
+  the staged DLL (the video player's by-name load is untested).
+  The override remains valid for titles that `LoadLibrary("ddraw.dll")` by
+  name, but it is not a fix for Disciples' renderer (see
+  [wine-recipe.md](wine-recipe.md)).
 * `WINEDEBUG=-all` — set unless `-v`.
 
 The launcher waits for the game and returns its exit code.
@@ -114,9 +120,9 @@ The launcher waits for the game and returns its exit code.
 disciples-play doctor --game-dir "/path/to/Disciples Gold" [--json]
 ```
 
-Reports one line per check — `PASS`/`FAIL`/`WARN` with a one-line fix hint —
-instead of prose, so a second machine is a set of checkable lines rather than a
-hand-made prefix. The checks, in order:
+Reports one line per check — `PASS`/`FAIL`/`WARN`/`INFO` with a one-line fix
+hint — instead of prose, so a second machine is a set of checkable lines rather
+than a hand-made prefix. The checks, in order:
 
 | Check | What it verifies |
 |---|---|
@@ -124,9 +130,9 @@ hand-made prefix. The checks, in order:
 | `ini` | `Exe/DISCIPLE.INI` present and writable |
 | `ini-paths` | all 15 `[Installation]` + 6 `[InstallationClient]` keys are present and each holds an absolute Windows path that resolves to this install, matched **case-insensitively** (the INI's `globals` vs the install's `Globals` is expected). Relative/empty values are a **FAIL** — bare relative names fail in-game with "unable to load fonts" (plan R1/Q1) — as are missing keys and stale paths; extra/unknown keys are a WARN. |
 | `wine` | `wine` present and reports a `--version`. **FAIL** on POSIX when absent (the launcher cannot run without it); PASS "not needed" on Windows. When wine **is** found, the detail also carries a pointer for start-up crashes — "if the game crashes at start-up under plain Wine, use a Proton runner (see docs/wine-recipe.md)". It is a fixed string, not a Proton detection: a `wine --version` string cannot tell Proton from Wine, and a wrong guess would be worse than the hint. |
-| `ddraw-override` | `WINEDLLOVERRIDES` routes `ddraw` to native (`ddraw=n…` — a bare `ddraw=b`/`ddraw=d`/`ddraw=` does **not** count), or the wrapper is staged next to the exe (which the launcher overrides automatically) |
+| `ddraw-override` | reports whether a native-ddraw route is configured (`WINEDLLOVERRIDES` routes `ddraw` to native, or the wrapper is staged next to the exe). It is **always INFO for this title**, never a WARN (no user action can clear it — there is nothing to fix, so it carries no fix hint): the game acquires DirectDraw via `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll` (COM), so for the renderer `ddraw=n,b` and a staged `ddraw.dll` are inert (the video player's by-name load is untested) — the override only matters for titles that `LoadLibrary("ddraw.dll")` by name |
 | `wrapper` | cnc-ddraw's `ddraw.dll` staged with a marker file matching its digest (mismatch → WARN "not ours, leaving it alone") |
-| `ini-window` | `[Disciple] InWindow`, the game's **own** display mode. `InWindow=0` PASS (the fullscreen baseline; windowed presentation comes from cnc-ddraw). `InWindow=1` **always WARNs**, because cnc-ddraw needs the game itself fullscreen (`InWindow=0` is the precondition in `docs/verification.md`). The wording follows the `wrapper` line's own verdict: when `wrapper` PASSes (installed, digest matches the marker) it says cnc-ddraw is installed and verified but needs the game fullscreen, so set `InWindow=0`; otherwise (no DLL, foreign DLL, bad marker or digest, or only a `WINEDLLOVERRIDES` override) it says there is no verified cnc-ddraw — "windowed presentation needs cnc-ddraw; the launcher does not write this key" — and names the order that works: set `InWindow=0`, then stage cnc-ddraw next to `Disciple.exe` if you want a window (staging alone does not clear the warning; cnc-ddraw presents the window and the game stays fullscreen). A missing key is a WARN (the retail default is unknown). The doctor never writes this key: it is the user's display choice, and the launcher rewrites only the 21 installation paths. This is a configuration guard only — it makes no claim about the start-up crash at `0059559E`, which also happens with `InWindow=0`. |
+| `ini-window` | `[Disciple] InWindow`, the game's **own** display mode. `InWindow=0` PASS (the fullscreen baseline the Wine recipes use). `InWindow=1` **always WARNs**: the check cannot promise a window from cnc-ddraw, because this title's renderer never loads it (COM → `system32\ddraw.dll`), so `InWindow` is the user's own display choice and `InWindow=0` is the documented baseline. The wording follows the `wrapper` line's own verdict: when `wrapper` PASSes it says cnc-ddraw is installed and verified but this title never loads it (COM → `system32\\ddraw.dll`), so `InWindow=0` is the documented baseline; otherwise it says there is no verified cnc-ddraw and that windowed presentation is not delivered by this pack — staging a DLL next to `Disciple.exe` cannot give this title a window. A missing key is a WARN (the retail default is unknown). The doctor never writes this key: it is the user's display choice, and the launcher rewrites only the 21 installation paths. This is a configuration guard only — it makes no claim about the start-up crash at `0059559E`, which also happens with `InWindow=0`. |
 | `music` | 25 `.wav` files in `Music/` (count and size only) |
 | `video` | 41 `.smk` cutscenes — 6 in `Video/` + 35 in `Briefing/` (count and size only) |
 | `display` | an X display is available (WARN "no X display: cannot verify windowing" when `DISPLAY` is unset) |
@@ -140,16 +146,18 @@ reduced to a matches/does-not-match verdict before it reaches the report, so a
 `--json` emits a stable schema:
 
 ```json
-{"checks": [{"id": "…", "status": "pass|fail|warn", "detail": "…"}, …], "ok": true}
+{"checks": [{"id": "…", "status": "pass|fail|warn|info", "detail": "…"}, …], "ok": true}
 ```
 
-Doctor exit codes: `0` all checks passed, `1` any check failed, `2` bad
+Doctor exit codes: `0` no check failed, `1` any check failed, `2` bad
 arguments. A `WARN` never fails the run, but the checks that block play are
 FAILs: a missing `wine` on POSIX is a FAIL (exit `1`), not a WARN, because the
-launcher cannot run without it. `--game-dir` may appear before or after the
-`doctor` subcommand. The doctor is read-only — it never writes into the
-install. `ok` in the JSON output is `true` when no check FAILs (WARNs do not
-flip it).
+launcher cannot run without it. `INFO` marks a check that is true but
+actionable by nobody (for this title, `ddraw-override`): it never fails the run
+and carries no fix hint, because there is nothing to fix. `--game-dir` may
+appear before or after the `doctor` subcommand. The doctor is read-only — it
+never writes into the install. `ok` in the JSON output is `true` when no check
+FAILs (WARNs and INFO do not flip it).
 
 ## `data` — read-only structural report
 
@@ -190,8 +198,8 @@ The report layout and every measured number are documented in
 | `3` | Rewrite refused — the INI is not writable, or the `copy-tree` target already exists / could not be copied. |
 | `4` | Wine not found (launch only). |
 
-The `doctor` subcommand overrides this with its own contract: `0` all checks
-passed, `1` any check failed, `2` bad arguments (a missing `--game-dir` with no
+The `doctor` subcommand overrides this with its own contract: `0` no check
+failed, `1` any check failed, `2` bad arguments (a missing `--game-dir` with no
 env/config fallback is `2`; an install that does not resolve is a `FAIL` check,
 `1`).
 

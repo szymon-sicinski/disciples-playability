@@ -85,9 +85,9 @@ supported sequence is `disciples-play --no-launch --game-dir …` and then
   competing hypotheses scored, ID cross-reference counts, plain-text digests.
   No pixels, no palettes, no hashes.
 - **cnc-ddraw preset** — nine `[ddraw]` keys, including `windowed=1`, `maintas=1`,
-  `maxfps=60`, `vsync=1`, `adjmouse=1` and `hook=4` (mode 4 patches the module
-  that actually loads DirectDraw); with a pinned `v7.1.0.0` fetch and MIT licence
-  text.
+  `maxfps=60`, `vsync=1`, `adjmouse=1` and `hook=4` (mode 4 patches every loaded
+  module, not just the executable's import table); with a pinned `v7.1.0.0` fetch
+  and MIT licence text. **For this title's renderer the preset cannot engage** — see below.
 - **Recipes and probe** — [`docs/wine-recipe.md`](docs/wine-recipe.md) covers
   plain `wine`, Bottles and Heroic/Proton; `scripts/probe-matrix.sh` runs the
   `DDraw × PaletteAnim` matrix and writes a paste-back report.
@@ -116,18 +116,24 @@ the lowercase spelling), and starts the game you own; nothing is uploaded and no
 game data is shipped. Full walk-through:
 [`docs/quickstart.md`](docs/quickstart.md).
 
-A **window** additionally needs cnc-ddraw, and in v0.1 that step is **manual**:
-the pack ships the preset and the pinned fetch as `disciples_play.wrapper`, but
-the one-line install command is not wired yet — copy `ddraw.dll` and
-`ddraw.ini` from the pinned `v7.1.0.0` release into `Exe/` (it is **not**
-committed here). See [`docs/wrapper.md`](docs/wrapper.md).
+A **window** is what the pack is built to deliver, and today it does not: the
+game asks COM for DirectDraw (`system32\ddraw.dll`), so a `ddraw.dll` staged in
+`Exe/` is not what the renderer loads (`docs/wine-recipe.md` "Known crash at start-up"). The
+preset, the pinned `v7.1.0.0` fetch and the install function all exist as
+`disciples_play.wrapper`; they are exercised and tested, and the renderer does not load them
+until the game's COM server is redirected. See
+[`docs/wrapper.md`](docs/wrapper.md).
 
 > **Status: plain-Wine start-up crashes at `0059559E` and is unresolved.** The
-> runs on 2026-11-21 died with `Exception C0000005` (write to `0x00000000`)
+> runs on 2026-11-21 died with `Exception C0000005` at `0059559E` (the faulting
+> instruction, the failed display-mode change and the open question about the
+> dereferenced object are in `docs/wine-recipe.md`)
 > after the game logged its own start, with `InWindow=1` and `InWindow=0` alike,
-> and a third with the wrapper staged faulted the same way — so display mode is
-> not the cause, and the wrapper does not change it. `DDraw=0` starts to a black
-> screen instead. Still open: a non-wow64 Wine and a different Windows version in
+> and a third with the wrapper staged faulted the same way — so the `InWindow`
+> setting is not the cause, and the wrapper does not change it. What remains
+> open is the 640x480x8 mode request the trace shows being refused immediately
+> before the fault: the setting is ruled out, that request is not. `DDraw=0`
+> starts to a black screen instead. Still open: a non-wow64 Wine and a different Windows version in
 > the prefix. The sequence that does work — rewrite
 > the INI, then start the game from a Proton runner — is
 > [`docs/wine-recipe.md`](docs/wine-recipe.md) "Start here"; the fault itself is
@@ -136,11 +142,11 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 > section.
 >
 > `doctor` reports `[Disciple] InWindow` as its `ini-window` line — `PASS` for
-> `0`, `WARN` for `1` in every case (even with a verified cnc-ddraw, which needs
-> the game fullscreen), `WARN` for a missing key. That
-> line is a **configuration guard** ("windowed presentation needs cnc-ddraw; the
-> launcher does not write this key"), not a crash fix, and the launcher never
-> rewrites the key: it is your display choice, not a path.
+> `0`, `WARN` for `1` in every case (a verified cnc-ddraw does not change that:
+> this title's renderer never loads it), `WARN` for a missing key. That
+> line is a **configuration guard** ("windowed presentation is not delivered by
+> this pack for this title"), not a crash fix, and the launcher never rewrites
+> the key: it is your display choice, not a path.
 
 ## Documentation
 
@@ -159,7 +165,7 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
 **Verified here** (commands in [`docs/verification.md`](docs/verification.md#what-the-agents-did-verify-for-contrast)):
 
-- 226 synthetic-fixture tests pass; 2 read-only tests pass against a retail
+- 238 synthetic-fixture tests pass; 2 read-only tests pass against a retail
   install; `ruff check` and `ruff format --check` are clean.
 - CI: pytest + ruff on ubuntu-latest and windows-latest, Python 3.10, 3.11,
   3.12, 3.13, plus a `disciples-play --help` smoke test per cell.
