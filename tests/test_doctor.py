@@ -617,7 +617,8 @@ def test_ddraw_override_reads_env(
 # asserts the check never claims to prevent a crash.
 
 WINDOWED_NEEDS_WRAPPER = (
-    "windowed presentation needs cnc-ddraw; the launcher does not write this key"
+    "windowed presentation is not delivered by this pack for this title: "
+    "cnc-ddraw is never loaded (the game asks COM for system32\\ddraw.dll)"
 )
 
 
@@ -707,12 +708,18 @@ def _ini_and_wrapper_lines(capsys: pytest.CaptureFixture[str]) -> tuple[str, str
 
 
 def _assert_no_false_wrapper_claim(ini_line: str) -> None:
+    """The WARN must not claim the wrapper does anything for this title.
+
+    It also must not lie in the other direction: the line may say staging cannot
+    help, and must always tell the reader what the documented baseline is.
+    """
     assert ini_line.startswith("WARN ini-window:")
     assert "no verified cnc-ddraw" in ini_line
     assert "staged" not in ini_line
     assert "provided by the wrapper" not in ini_line
     assert "installed and verified" not in ini_line
-    assert "stage cnc-ddraw next to Disciple.exe" in ini_line
+    assert "cannot give this title a window" in ini_line
+    assert "InWindow=0" in ini_line
     assert "InWindow=0" in ini_line
 
 
@@ -732,8 +739,8 @@ def test_ini_window_windowed_with_verified_wrapper_still_warns(
     assert wrapper_line.startswith("PASS wrapper:")
     assert ini_line.startswith("WARN ini-window:")
     assert "cnc-ddraw is installed and verified" in ini_line
-    assert "needs the game fullscreen" in ini_line
-    assert "set InWindow=0 in Exe/DISCIPLE.INI" in ini_line
+    assert "this title never loads it" in ini_line
+    assert "InWindow=0 is the documented baseline" in ini_line
     assert "provided by the wrapper" not in ini_line
 
 

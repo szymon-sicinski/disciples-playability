@@ -170,9 +170,9 @@ would have to be **registered as the COM server for `CLSID_DirectDraw`**
 neither the launcher does today, and neither is tested here.
 
 `doctor`'s `ini-window` line is a **configuration guard, not a crash fix**: it
-warns on every `[Disciple] InWindow=1` (cnc-ddraw needs the game fullscreen,
-so a window the game makes itself is never the supported setup), and passes only
-on `InWindow=0`. Neither verdict says
+warns on every `[Disciple] InWindow=1` — because this title never loads a
+wrapper, the key cannot buy you a window, so `InWindow=0` stays the documented
+baseline — and passes only on `InWindow=0`. Neither verdict says
 anything about whether the game starts.
 
 Root-cause work on `0059559E` continues outside this card. Do not add a
@@ -357,12 +357,13 @@ already has.
 A black screen or a window that never appears is a *presentation* problem and is
 not the start-up crash above. For any recipe, in this order:
 
-1. **Game fullscreen, wrapper windowed.** cnc-ddraw expects the *game* to be
-   fullscreen (`InWindow=0`); windowing comes from the wrapper. A game that is
-   itself windowed fights cnc-ddraw. Confirm `InWindow=0` in `Exe\DISCIPLE.INI`
-   (the launcher does not change it; `doctor`'s `ini-window` line reports it).
-   If the game dies at start-up with `C0000005` at `0059559E` instead, you have
-   the unresolved crash above, not a black-screen cause.
+1. **Is a wrapper claimed here?** cnc-ddraw expects the *game* to be fullscreen
+   (`InWindow=0`) and presents the window itself — but **this title never loads
+   it** (see "Known crash at start-up"), so no `InWindow` value and no staged DLL
+   can produce a window today. If a black screen is your symptom, the black
+   screen and the start-up crash are both consequences of that, not of this
+   setting; `doctor`'s `ini-window` line reports the key but cannot promise a
+   window.
 2. **Override in effect (for titles that load cnc-ddraw).** `disciples-play
    doctor --game-dir …` → the `ddraw-override` line. For this title that line
    always WARNs — the game acquires DirectDraw via

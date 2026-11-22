@@ -29,12 +29,12 @@ those eleven items are ticked.
   music, video, display) with a fix hint per line and a stable `--json` schema.
   It is read-only, never prints a game hash, and never rewrites the display key.
 - **`ini-window` guard** — `doctor` warns whenever `[Disciple] InWindow=1`, with
-  or without a wrapper (cnc-ddraw needs the game fullscreen; the wording follows
-  the `wrapper` check's verdict: "installed and verified, but it needs the game
-  fullscreen" vs "no verified cnc-ddraw: windowed presentation needs cnc-ddraw;
-  the launcher does not write this key"), passes only on `InWindow=0`, and
-  warns when the key is absent (retail default unknown). Configuration only: the
-  start-up crash at `0059559E` also happens with `InWindow=0`.
+  or without a wrapper. The wording follows the `wrapper` check's verdict
+  ("installed and verified, but this title never loads it" vs "no verified
+  cnc-ddraw: windowed presentation is not delivered by this pack for this
+  title"), passes only on `InWindow=0`, and warns when the key is absent (retail
+  default unknown). Configuration only: the start-up crash at `0059559E` also
+  happens with `InWindow=0`.
 - **`data` subcommand** — read-only structural report of the installation:
   directory inventory, dBase III geometry with closing header arithmetic, `MQDB`
   chunk offsets/sizes with competing hypotheses scored, ID cross-reference

@@ -89,7 +89,8 @@ _EXPECTED_VIDEO_SMKS = 41
 #: this card also happens with ``InWindow=0``, so display mode is not its cause
 #: and this check makes no claim about crashing.
 _WINDOWED_NEEDS_WRAPPER = (
-    "windowed presentation needs cnc-ddraw; the launcher does not write this key"
+    "windowed presentation is not delivered by this pack for this title: "
+    "cnc-ddraw is never loaded (the game asks COM for system32\\ddraw.dll)"
 )
 
 #: Values of ``[Disciple] InWindow`` read as "the game makes its own window" and
@@ -443,9 +444,8 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
             "ini-window",
             WARN,
             "DISCIPLE.INI has no [Disciple] InWindow key (the retail default is "
-            f"unknown); {_WINDOWED_NEEDS_WRAPPER} -- set InWindow=0 in "
-            "Exe/DISCIPLE.INI to run the game fullscreen, and stage cnc-ddraw "
-            "next to Disciple.exe when you want a window (docs/wrapper.md)",
+            f"unknown); {_WINDOWED_NEEDS_WRAPPER}; set InWindow=0 in "
+            "Exe/DISCIPLE.INI for the documented baseline (docs/wrapper.md)",
         )
 
     normalised = value.strip().lower()
@@ -454,7 +454,7 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
             "ini-window",
             PASS,
             f"[Disciple] InWindow={value.strip()} (the game fullscreen -- the baseline "
-            "the Wine recipes use; cnc-ddraw presents the window when staged)",
+            "the Wine recipes use; for this title no wrapper can present a window)",
         )
     if normalised in _TRUTHY:
         # Always a WARN: the verification precondition is InWindow=0. The wording
@@ -465,16 +465,17 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
                 "ini-window",
                 WARN,
                 f"[Disciple] InWindow={value.strip()} (the game makes its own window); "
-                "cnc-ddraw is installed and verified, but it needs the game "
-                "fullscreen: set InWindow=0 in Exe/DISCIPLE.INI (docs/wrapper.md)",
+                "cnc-ddraw is installed and verified, but this title never loads it "
+                "(COM -> system32\\ddraw.dll): the window is the game's own, and "
+                "InWindow=0 is the documented baseline (docs/wrapper.md)",
             )
         return Check(
             "ini-window",
             WARN,
             f"[Disciple] InWindow={value.strip()} (the game makes its own window) "
-            f"and no verified cnc-ddraw: {_WINDOWED_NEEDS_WRAPPER} -- set "
-            "InWindow=0 in Exe/DISCIPLE.INI to run the game fullscreen, and stage "
-            "cnc-ddraw next to Disciple.exe when you want a window",
+            f"and no verified cnc-ddraw: {_WINDOWED_NEEDS_WRAPPER}; set "
+            "InWindow=0 in Exe/DISCIPLE.INI for the documented baseline -- staging "
+            "cnc-ddraw next to Disciple.exe cannot give this title a window",
         )
     return Check(
         "ini-window",

@@ -85,9 +85,9 @@ supported sequence is `disciples-play --no-launch --game-dir …` and then
   competing hypotheses scored, ID cross-reference counts, plain-text digests.
   No pixels, no palettes, no hashes.
 - **cnc-ddraw preset** — nine `[ddraw]` keys, including `windowed=1`, `maintas=1`,
-  `maxfps=60`, `vsync=1`, `adjmouse=1` and `hook=4` (mode 4 patches the module
-  that actually loads DirectDraw); with a pinned `v7.1.0.0` fetch and MIT licence
-  text.
+  `maxfps=60`, `vsync=1`, `adjmouse=1` and `hook=4` (mode 4 patches every loaded
+  module, not just the executable's import table); with a pinned `v7.1.0.0` fetch
+  and MIT licence text. **For this title the preset cannot engage** — see below.
 - **Recipes and probe** — [`docs/wine-recipe.md`](docs/wine-recipe.md) covers
   plain `wine`, Bottles and Heroic/Proton; `scripts/probe-matrix.sh` runs the
   `DDraw × PaletteAnim` matrix and writes a paste-back report.
@@ -116,11 +116,13 @@ the lowercase spelling), and starts the game you own; nothing is uploaded and no
 game data is shipped. Full walk-through:
 [`docs/quickstart.md`](docs/quickstart.md).
 
-A **window** additionally needs cnc-ddraw, and in v0.1 that step is **manual**:
-the pack ships the preset and the pinned fetch as `disciples_play.wrapper`, but
-the one-line install command is not wired yet — copy `ddraw.dll` and
-`ddraw.ini` from the pinned `v7.1.0.0` release into `Exe/` (it is **not**
-committed here). See [`docs/wrapper.md`](docs/wrapper.md).
+A **window** is what the pack is built to deliver, and today it does not: the
+game asks COM for DirectDraw (`system32\ddraw.dll`), so a `ddraw.dll` staged in
+`Exe/` is never loaded (`docs/wine-recipe.md` "Known crash at start-up"). The
+preset, the pinned `v7.1.0.0` fetch and the install function all exist as
+`disciples_play.wrapper`; they are exercised and tested, and they cannot engage
+until the game's COM server is redirected. See
+[`docs/wrapper.md`](docs/wrapper.md).
 
 > **Status: plain-Wine start-up crashes at `0059559E` and is unresolved.** The
 > runs on 2026-11-21 died with `Exception C0000005` at `0059559E` (the faulting
@@ -142,9 +144,9 @@ committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 > `doctor` reports `[Disciple] InWindow` as its `ini-window` line — `PASS` for
 > `0`, `WARN` for `1` in every case (even with a verified cnc-ddraw, which needs
 > the game fullscreen), `WARN` for a missing key. That
-> line is a **configuration guard** ("windowed presentation needs cnc-ddraw; the
-> launcher does not write this key"), not a crash fix, and the launcher never
-> rewrites the key: it is your display choice, not a path.
+> line is a **configuration guard** ("windowed presentation is not delivered by
+> this pack for this title"), not a crash fix, and the launcher never rewrites
+> the key: it is your display choice, not a path.
 
 ## Documentation
 
