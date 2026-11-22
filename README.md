@@ -123,7 +123,8 @@ the one-line install command is not wired yet — copy `ddraw.dll` and
 committed here). See [`docs/wrapper.md`](docs/wrapper.md).
 
 > **Status: plain-Wine start-up crashes at `0059559E` and is unresolved.** The
-> runs on 2026-11-21 died with `Exception C0000005` (write to `0x00000000`)
+> runs on 2026-11-21 died with `Exception C0000005` at `0059559E` (the faulting
+> instruction and its null surface are in `docs/wine-recipe.md`)
 > after the game logged its own start, with `InWindow=1` and `InWindow=0` alike,
 > and a third with the wrapper staged faulted the same way — so display mode is
 > not the cause, and the wrapper does not change it. `DDraw=0` starts to a black

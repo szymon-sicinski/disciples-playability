@@ -64,13 +64,14 @@ override that routes DirectDraw to the staged `cnc-ddraw` DLL. Only the Proton
 path (§3) has actually started this title so far.
 
 The one thing every recipe shares is the **override**. `Disciple.exe` does not
-import DirectDraw — `HA312W32.DLL` loads `ddraw.dll` by name — so a
-`ddraw.dll` dropped next to `Disciple.exe` plus a `ddraw=n,b` override is
-*meant* to take over the whole graphics layer. `n` = native (load our DLL),
-`b` = builtin fallback. Treat that as the pack's intended presentation path,
-not as a measured result for this title (see the caveat above and
-[`verification.md`](verification.md) items 2–5, all still unticked). See
-[`wrapper.md`](wrapper.md) for why, and the `doctor` subcommand for checking
+import DirectDraw, and no module `LoadLibrary`s `ddraw.dll` by name — the game
+acquires DirectDraw through **`CoCreateInstance(CLSID_DirectDraw)`**, which
+resolves to the prefix's `system32\ddraw.dll` via the COM registry entry (see
+"Known crash at start-up" below). A `ddraw.dll` dropped next to `Disciple.exe`
+plus a `ddraw=n,b` override is therefore **not** able to take over the graphics
+layer for this title — the native DLL is never loaded. `n` = native (load our
+DLL), `b` = builtin fallback; for this title the override can only ever fall back
+to `b`. See [`wrapper.md`](wrapper.md) and the `doctor` subcommand for checking
 that the override is at least in effect:
 
 ```bash
@@ -85,40 +86,74 @@ As of **2026-11-21** this title does not reach the main menu from this pack's
 launcher on plain Wine (wine-11.21 Staging, wow64), in **either** display mode.
 It is not a configuration fault that a recipe below can undo: the way round it is
 a different launch environment — the supported sequence at the top of this file,
-not a Wine setting. No Wine-side fix is known.
+not a Wine setting. The cause is now understood (the game acquires DirectDraw
+through `CoCreateInstance(CLSID_DirectDraw)`; see "What the crash is" below), and
+the one candidate Wine-side fix — register cnc-ddraw as that COM server — is
+untested.
 
 What the runs on plain `wine` showed:
 
 ```
 Disciple.log   "Midgard (v.2000, 6, 22, 1) started on Sat Nov 21 19:13:04 2026"
                -> the game's own startup code runs, then it dies
-crash          Exception C0000005, write to 0x00000000, EIP 0059559E, EAX=0
+crash          Unhandled page fault on read access to 00000000, EIP 0059559E, EAX=0
                mov eax,[esi+8] ; mov eax,[eax+8] ; push eax
                mov ecx,[eax]   ; call [ecx+0x58]
                -> [this+8] is a valid object whose own +8 member is null, and the
                   game calls a virtual method through it with no null check
-imports        Disciple.exe imports no ddraw/dsound/dinput; SHW32.dll is the
-               graphics layer
+               -> the faulting access is a READ through a null eax; the Windows
+                  crash dialog labels the same fault "write to location 00000000"
+imports        Disciple.exe imports no ddraw/dsound/dinput; it acquires DirectDraw
+               via CoCreateInstance(CLSID_DirectDraw) through ole32 — the renderer
+               lives in Disciple.exe (CPrimaryDisplayDDraw / CPrimaryDisplayDIB).
+               SHW32.dll is SmartHeap (the memory manager), not the graphics layer
 launcher       all 21 installation keys rewritten, DISCIPLE.ini.orig written --
                the rewrite itself is fine
-wrapper        no ddraw.dll staged in the first copy that crashed; the second
-               run had the wrapper staged and faulted the same way
+wrapper        a cnc-ddraw ddraw.dll staged in Exe\ is never loaded — the game's
+               COM path resolves system32\ddraw.dll, not the app directory — so it
+               faults identically with or without the wrapper (see "What the crash
+               is" below)
 ```
 
-Tested and **ruled out**:
+Measured headlessly in the retrolab rig (wine-staging **11.21**, wow64-only,
+llvmpipe software GL, no audio, baked prefix) on **2026-11-22**, one variable per
+run. Legend: `[V]` = measured in that run, `[H]` = hypothesis, `[U]` = untested
+in this rig (needs the maintainer's machine or a different Wine build).
 
-| Candidate | Result |
+| Experiment | Result |
 |---|---|
-| `[Disciple] InWindow=1` (the game's own window mode) | **crashes at `0059559E`** |
-| `[Disciple] InWindow=0` (fullscreen, the retail baseline) | **crashes at `0059559E`** — same fault |
+| **B** — `WINEDLLOVERRIDES=ddraw=b` (builtin ddraw, baseline) | **[V] crashes at `0059559E`, deterministically.** `Disciple.log` = "Midgard started" (dies before sound init); frame = the crash dialog (mean 241, 74 colours); windows = game + "Wine Debugger" + "Program Error". |
+| **E5** — `WINEDLLOVERRIDES=ddraw=n` (native cnc-ddraw, **no** `,b` fallback) | **[V] same `0059559E` crash**, and Wine reports the native DLL is *never loaded*: `err:ole:apartment_add_dll couldn't load in-process dll C:\windows\system32\ddraw.dll`, then `class {D7B70EE0-4340-11CF-B063-0020AFC2CD35} not registered`. The staged `Exe\ddraw.dll` is not in that path, so `n` always falls back to builtin — exactly why the pack's `n,b` never helped. |
+| **E7** — `[Disciple] DDraw=0` (GDI fallback) | **[V] does not crash** — process alive at the 25 s kill. Frame near-black (mean 1→10, 33→52 colours); `Disciple.log` = "Midgard started" + "Sound system could not be initialized" (no audio device in the rig). Confirms "GDI starts, black screen". |
+| **E3** — `WINEDLLOVERRIDES=msvcrt=n` (force the bundled 1999 `MSVCRT.DLL`) | **[V] not a fix and not the same crash.** Wine's own DLL chain breaks — `err:module:import_dll Library msvcrt.dll (needed by advapi32/rpcrt4/user32/gdi32/shell32) not found`, `STATUS_DLL_NOT_FOUND c0000135`. The game process starts ("Midgard started") but the loader never reaches DirectDraw, so the CRT is not the cause. |
+| **E4** — `WINEARCH=win32` prefix (non-wow64) | **[U] cannot be run in this rig** — this Wine build is wow64-only: `wine: WINEARCH is set to 'win32' but this is not supported in wow64 mode.` Needs a 32-bit-capable Wine build on the maintainer's machine. |
+| **E1** — Windows version gate (`winecfg` → 98/XP) | **[U]** — the prefix reports Windows 10 Pro (build 19045); not changed here. Proton reports Win7/WinXP to old titles, so this is still a plausible differential and a ~10-second maintainer test. |
+| **E2** — virtual desktop 800×600 | **[U]** — `winecfg` display change not applied in the rig. |
+| **E6** — X11 vs Wayland display path | **[U]** — the rig is X11-only (Xvfb); needs the maintainer's display. |
+| Wine version ≠ 11.21 | **[U]** — only 11.21 is available in the rig (pinned by SHA-256); no other build can be added without changing the image. |
 
-Display mode is therefore not the cause, and the retail fullscreen baseline is
-not the fix. Two candidates are **ruled out** by later runs under plain `wine`
-(recorded in the launch-path work): a **staged cnc-ddraw** (`ddraw.dll` +
-`ddraw.ini`) reaches the same fault, and the engine's own **GDI path**
-(`DDraw=0`) starts with sound but a black screen. Still open: a non-`wow64`
-Wine build, and a different Windows version in the prefix (`winecfg` → Windows
-version).
+**What the crash is (resolved, `[V]`).** The investigation's open question — how
+`Disciple.exe` obtains `IDirectDraw` — is now answered: the game calls
+**`CoCreateInstance(CLSID_DirectDraw)`** (`{D7B70EE0-4340-11CF-B063-0020AFC2CD35}`),
+which resolves through the prefix registry's
+`HKCR\CLSID\{…}\InprocServer32 = C:\windows\system32\ddraw.dll` — the COM server
+path, **not** the application-directory DLL search. Two failure modes land on the
+same null dereference at `0059559E`:
+
+- **builtin ddraw** (`ddraw=b`): COM returns a builtin `IDirectDraw`, but the
+  8-bit paletted primary-surface `CreateSurface` fails under Wine's
+  wined3d-backed ddraw, so the `IDirectDrawSurface*` stays null and
+  `GetSurfaceDesc()` dereferences it.
+- **native ddraw** (`ddraw=n`): the COM server load itself fails (`class not
+  registered`), so there is no `IDirectDraw` at all.
+
+**Consequence for the pack.** A cnc-ddraw `ddraw.dll` staged next to
+`Disciple.exe` is **never loaded** by this title, because its DDraw acquisition is
+COM-based and `InprocServer32` points at `system32`. The `ddraw=n,b` override can
+therefore only ever fall back to `b`. To make cnc-ddraw take over, its `ddraw.dll`
+would have to be **registered as the COM server for `CLSID_DirectDraw`**
+(`regsvr32 ddraw.dll` in the prefix) or dropped into the prefix's `system32` —
+neither the launcher does today, and neither is tested here.
 
 `doctor`'s `ini-window` line is a **configuration guard, not a crash fix**: it
 warns on every `[Disciple] InWindow=1` (cnc-ddraw needs the game fullscreen,
@@ -266,15 +301,15 @@ already has.
 
    (Heroic exposes this under the game's **"Environment Variables"** field —
    one `NAME = VALUE` pair per line.)
-3. **Proton's own ddraw can fight the wrapper.** Proton ships its own DirectDraw
-   translation; without the override, Proton's built-in is used and cnc-ddraw's
-   windowed/upscaled presentation never engages. With the override set *and*
-   `ddraw.dll` staged next to `Disciple.exe`, the native DLL wins. If the game
-   still opens in Proton's own mode, confirm the override is spelled exactly
-   `ddraw=n,b` and that `ddraw.dll` really sits in `Exe\`. (Unverified: no run
-   so far has shown the staged DLL being loaded — module dumps name
-   `system32\ddraw.dll` and `wined3d.dll` every time. Treat the override as an
-   experiment, not a requirement to start.)
+3. **The game's DirectDraw acquisition is COM-based, so the staged wrapper is
+   never loaded here either.** `Disciple.exe` obtains DirectDraw through
+   `CoCreateInstance(CLSID_DirectDraw)`, which resolves to the prefix's
+   registered `system32\ddraw.dll` — under Proton that is Proton's own DXVK-based
+   ddraw (the reason the game works), not a cnc-ddraw `ddraw.dll` staged in
+   `Exe\`. So a `ddraw=n,b` override does not change which DLL the game loads;
+   Proton's built-in translation is what runs, and it is the fix that matters.
+   (Measured on plain Wine: the COM path never loads a staged `Exe\ddraw.dll` —
+   see "Known crash at start-up" above.)
 4. DPI: leave at 96 (same reasoning as §1c). The pack's launcher always execs a
    single `wine` binary — it has no Proton/`STEAM_COMPAT_*` path — so it cannot
    launch under the Heroic Proton prefix you just configured. Use the pack for

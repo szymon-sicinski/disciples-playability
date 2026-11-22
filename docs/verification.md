@@ -43,7 +43,7 @@ presentation needs it), `WARN` for a missing key. That WARN is a configuration
 guard only — it is neither a ticked box nor a claim about the start-up crash.
 
 **The start-up crash is separate and unresolved.** On 2026-11-21 the game died
-with `Exception C0000005` (write to `0x00000000`, EIP `0059559E`) after its own
+with `Exception C0000005` at `0059559E` after its own
 start-up log line — with `InWindow=0` **and** `InWindow=1`. Display mode is ruled
 out; the evidence and the open candidates are in
 [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine).
