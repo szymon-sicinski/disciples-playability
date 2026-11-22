@@ -98,9 +98,12 @@ Disciple.log   "Midgard (v.2000, 6, 22, 1) started on Sat Nov 21 19:13:04 2026"
                -> the game's own startup code runs, then it dies
 crash          Unhandled page fault on read access to 00000000, EIP 0059559E, EAX=0
                mov eax,[esi+8] ; mov eax,[eax+8] ; push eax
-               mov ecx,[eax]   ; call [ecx+0x58]
+               push edx        ; mov ecx,[eax]   ; call [ecx+0x58]
                -> [this+8] is a valid object whose own +8 member is null, and the
                   game calls a virtual method through it with no null check
+               -> +0x58 is GetSurfaceDesc on a surface and WaitForVerticalBlank on
+                  IDirectDraw4, and two arguments are pushed: the object's type is
+                  not established by the crash alone [H]
                -> the faulting access is a READ through a null eax; the Windows
                   crash dialog labels the same fault "write to location 00000000"
 imports        Disciple.exe imports no ddraw/dsound/dinput; it acquires DirectDraw
@@ -140,10 +143,17 @@ which resolves through the prefix registry's
 path, **not** the application-directory DLL search. Two failure modes land on the
 same null dereference at `0059559E`:
 
-- **builtin ddraw** (`ddraw=b`): COM returns a builtin `IDirectDraw`, but the
-  8-bit paletted primary-surface `CreateSurface` fails under Wine's
-  wined3d-backed ddraw, so the `IDirectDrawSurface*` stays null and
-  `GetSurfaceDesc()` dereferences it.
+- **builtin ddraw** (`ddraw=b`, `[V]`): COM returns a builtin `IDirectDraw` and
+  the game gets as far as `SetCooperativeLevel(DDSCL_FULLSCREEN|DDSCL_EXCLUSIVE)`
+  and `SetDisplayMode(640, 480, 8)`. The mode change is **refused** —
+  `err:system:NtUserChangeDisplaySettings ... returned -2` — and the following
+  `GetDisplayMode` still reports 1280x1024x32. The game then dereferences a null
+  object whose type the crash alone does not establish (`+0x58` is
+  `IDirectDrawSurface::GetSurfaceDesc` *and* `IDirectDraw4::WaitForVerticalBlank`,
+  and the code pushes two arguments). **`[H]`:** no `CreateSurface` call appears
+  anywhere in the `WINEDEBUG=+ddraw` trace, so "the primary surface stayed null"
+  is a hypothesis, not an observation — what is measured is that the 8-bit mode
+  is not applied and the fault follows.
 - **native ddraw** (`ddraw=n`): the COM server load itself fails (`class not
   registered`), so there is no `IDirectDraw` at all.
 
@@ -293,23 +303,22 @@ already has.
 
 1. Add the game in Heroic (or use the existing entry), then open its
    **Settings → Wine / "Other"** panel.
-2. Set the environment override so Proton loads the native `ddraw.dll`:
-
-   ```
-   WINEDLLOVERRIDES = "ddraw=n,b"
-   ```
-
-   (Heroic exposes this under the game's **"Environment Variables"** field —
-   one `NAME = VALUE` pair per line.)
-3. **The game's DirectDraw acquisition is COM-based, so the staged wrapper is
-   never loaded here either.** `Disciple.exe` obtains DirectDraw through
+2. **No `WINEDLLOVERRIDES` is needed, and setting one changes nothing here.** The
+   game's COM path ignores the app-directory DLL search that an override would
+   redirect (step 3). If your Heroic entry already carries
+   `WINEDLLOVERRIDES = "ddraw=n,b"` from an earlier attempt, it is harmless —
+   leave it or remove it, the measured result is the same.
+3. **The game's DirectDraw acquisition is COM-based, so a staged wrapper is never
+   loaded.** `Disciple.exe` obtains DirectDraw through
    `CoCreateInstance(CLSID_DirectDraw)`, which resolves to the prefix's
-   registered `system32\ddraw.dll` — under Proton that is Proton's own DXVK-based
-   ddraw (the reason the game works), not a cnc-ddraw `ddraw.dll` staged in
-   `Exe\`. So a `ddraw=n,b` override does not change which DLL the game loads;
-   Proton's built-in translation is what runs, and it is the fix that matters.
-   (Measured on plain Wine: the COM path never loads a staged `Exe\ddraw.dll` —
-   see "Known crash at start-up" above.)
+   registered `system32\ddraw.dll` — measured on plain Wine (see "Known crash at
+   start-up" above). **`[U]` what Proton resolves that COM path to has not been
+   measured.** It is *not* DXVK: DXVK implements Direct3D 8/9/10/11, and nothing
+   in it provides `IDirectDraw`; Proton's `ddraw.dll` is Wine's own,
+   wined3d-backed one — the same DLL measured failing above. Why the same title
+   starts under Proton and dies under plain Wine is therefore **open**, and the
+   candidates are the Proton Wine version and its patches, the prefix's Windows
+   version, and the display path — not a different ddraw implementation.
 4. DPI: leave at 96 (same reasoning as §1c). The pack's launcher always execs a
    single `wine` binary — it has no Proton/`STEAM_COMPAT_*` path — so it cannot
    launch under the Heroic Proton prefix you just configured. Use the pack for
