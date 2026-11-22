@@ -9,8 +9,8 @@ loads, and ``WINEDLLOVERRIDES="ddraw=n,b"`` can only fall back to builtin
 (measured; see ``docs/wine-recipe.md``). `cnc-ddraw
 <https://github.com/FunkyFr3sh/cnc-ddraw>`_ (MIT) supplies the DLL and the
 windowed, upscaled presentation this pack is built to deliver -- the mechanism
-below is exercised and tested, but it cannot engage until the game's COM server
-is redirected, which the pack does not do.
+below is exercised and tested, but the renderer does not load it until the game's
+COM server is redirected, which the pack does not do.
 
 This module turns the hand-unzip-and-configure dance into three reproducible
 pieces:

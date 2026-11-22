@@ -87,7 +87,7 @@ supported sequence is `disciples-play --no-launch --game-dir …` and then
 - **cnc-ddraw preset** — nine `[ddraw]` keys, including `windowed=1`, `maintas=1`,
   `maxfps=60`, `vsync=1`, `adjmouse=1` and `hook=4` (mode 4 patches every loaded
   module, not just the executable's import table); with a pinned `v7.1.0.0` fetch
-  and MIT licence text. **For this title the preset cannot engage** — see below.
+  and MIT licence text. **For this title's renderer the preset cannot engage** — see below.
 - **Recipes and probe** — [`docs/wine-recipe.md`](docs/wine-recipe.md) covers
   plain `wine`, Bottles and Heroic/Proton; `scripts/probe-matrix.sh` runs the
   `DDraw × PaletteAnim` matrix and writes a paste-back report.
@@ -120,7 +120,7 @@ A **window** is what the pack is built to deliver, and today it does not: the
 game asks COM for DirectDraw (`system32\ddraw.dll`), so a `ddraw.dll` staged in
 `Exe/` is not what the renderer loads (`docs/wine-recipe.md` "Known crash at start-up"). The
 preset, the pinned `v7.1.0.0` fetch and the install function all exist as
-`disciples_play.wrapper`; they are exercised and tested, and they cannot engage
+`disciples_play.wrapper`; they are exercised and tested, and the renderer does not load them
 until the game's COM server is redirected. See
 [`docs/wrapper.md`](docs/wrapper.md).
 

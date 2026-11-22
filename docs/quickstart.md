@@ -56,7 +56,7 @@ DirectDraw through `CoCreateInstance(CLSID_DirectDraw)` → `system32\ddraw.dll`
 (COM), so the renderer does not load a `ddraw.dll` staged in `Exe/`, and the
 `WINEDLLOVERRIDES=ddraw=n,b` the launcher sets once it finds the DLL is inert —
 it can only fall back to builtin. The override remains valid for titles that
-`LoadLibrary("ddraw.dll")` by name, but for Disciples it is not a fix, and
+`LoadLibrary("ddraw.dll")` by name, but for Disciples' renderer it is not a fix, and
 windowed/upscaled presentation is therefore **not delivered by this pack**
 today. **Why the same title starts under a Proton runner is not measured** —
 and it is not a different ddraw implementation (DXVK provides Direct3D, not

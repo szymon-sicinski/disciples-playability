@@ -84,11 +84,11 @@ _EXPECTED_MUSIC_WAVS = 25
 _EXPECTED_VIDEO_SMKS = 41
 
 #: What every ``InWindow`` warning uses: the title's renderer never loads a
-#: wrapper, so no value of the key can produce a window, and the launcher deliberately does not
-#: rewrite it -- it is the user's choice, unlike the 21 installation paths. This
-#: is a configuration statement only: the start-up crash at ``0059559E`` happens
-#: with ``InWindow=0`` as well, so the key is not its cause and this check makes
-#: no claim about crashing.
+#: wrapper, so no value of the key can produce a wrapper-presented window, and
+#: the launcher deliberately does not rewrite it -- it is the user's choice,
+#: unlike the 21 installation paths. This is a configuration statement only: the
+#: start-up crash at ``0059559E`` happens with ``InWindow=0`` as well, so the key
+#: is not its cause and this check makes no claim about crashing.
 _WINDOWED_NEEDS_WRAPPER = (
     "windowed presentation is not delivered by this pack for this title: "
     "the renderer never loads cnc-ddraw (the game asks COM for system32\\ddraw.dll)"
@@ -466,7 +466,7 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
             "ini-window",
             PASS,
             f"[Disciple] InWindow={value.strip()} (the game fullscreen -- the baseline "
-            "the Wine recipes use; for this title no wrapper can present a window)",
+            "the Wine recipes use; the renderer never loads a wrapper, so none presents its window)",
         )
     if normalised in _TRUTHY:
         # Always a WARN: the verification precondition is InWindow=0. The wording
@@ -487,14 +487,15 @@ def _ini_window_check(root: Path | None, ini_path: Path | None, exe_dir: Path | 
             f"[Disciple] InWindow={value.strip()} (the game makes its own window) "
             f"and no verified cnc-ddraw: {_WINDOWED_NEEDS_WRAPPER}; set "
             "InWindow=0 in Exe/DISCIPLE.INI for the documented baseline -- staging "
-            "cnc-ddraw next to Disciple.exe cannot give this title a window",
+            "cnc-ddraw next to Disciple.exe does not give the renderer a window (it never "
+            "loads it; the video player's by-name load is untested)",
         )
     return Check(
         "ini-window",
         WARN,
         f"[Disciple] InWindow={value.strip()!r} is neither 0 nor 1; use 0 in "
-        "Exe/DISCIPLE.INI for the documented baseline -- no value gives this "
-        "title a window from the pack",
+        "Exe/DISCIPLE.INI for the documented baseline -- no value gives the renderer "
+        "a wrapper-presented window",
     )
 
 
@@ -508,7 +509,7 @@ def _wrapper_check(root: Path | None, exe_dir: Path | None) -> Check:
             "wrapper",
             WARN,
             "cnc-ddraw not staged (no ddraw.dll next to Disciple.exe); staging "
-            "it would not help this title -- its renderer never loads it",
+            "it would not change the renderer, which never loads it",
         )
 
     marker = exe_dir / wrapper._MARKER_FILENAME

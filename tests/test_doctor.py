@@ -721,7 +721,7 @@ def test_ini_window_fullscreen_is_a_pass(
     assert "PASS ini-window: [Disciple] InWindow=0" in out
     # the detail is the only branch a revert could quietly restore a retracted
     # claim in: pin it like the other three
-    assert "no wrapper can present a window" in out
+    assert "none presents its window" in out
     assert "cnc-ddraw presents the window" not in out
     assert "WARN ini-window:" not in out
 
@@ -762,7 +762,7 @@ def _assert_no_false_wrapper_claim(ini_line: str) -> None:
     assert "staged" not in ini_line
     assert "provided by the wrapper" not in ini_line
     assert "installed and verified" not in ini_line
-    assert "cannot give this title a window" in ini_line
+    assert "does not give the renderer a window" in ini_line
     assert "InWindow=0" in ini_line
 
 
@@ -883,7 +883,7 @@ def test_ini_window_unrecognised_value_is_a_warn(
     assert "WARN ini-window:" in out
     assert "neither 0 nor 1" in out
     # the fourth place a window promise can hide: no value of the key gives a window
-    assert "no value gives this title a window" in out
+    assert "no value gives the renderer a wrapper-presented window" in out
     assert "let cnc-ddraw present the window" not in out
     assert "PASS ini-window:" not in out
 

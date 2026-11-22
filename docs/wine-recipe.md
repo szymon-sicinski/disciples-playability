@@ -202,7 +202,7 @@ once the wrapper is staged), or permanently via `winecfg`.
 > app-directory search an override redirects (see "Known crash at start-up").
 > Steps 1b and 1d below are therefore the recipe as designed, not a working
 > path for Disciples: staging the DLL and setting the override changes nothing
-> here.
+> for the renderer (the video player's by-name load is untested).
 
 **1a. Create the prefix and boot it once** (this installs the Wine runtime into
 the prefix; it must run once before the game):
@@ -322,7 +322,7 @@ already has.
 
 1. Add the game in Heroic (or use the existing entry), then open its
    **Settings → Wine / "Other"** panel.
-2. **No `WINEDLLOVERRIDES` is needed, and setting one changes nothing here.** The
+2. **No `WINEDLLOVERRIDES` is needed, and setting one changes nothing for the renderer.** The
    game's COM path ignores the app-directory DLL search that an override would
    redirect (step 3). If your Heroic entry already carries
    `WINEDLLOVERRIDES = "ddraw=n,b"` from an earlier attempt, it is harmless —
@@ -352,7 +352,7 @@ already has.
    set `STEAM_COMPAT_DATA_PATH` and `STEAM_COMPAT_CLIENT_INSTALL_PATH` and run
    `proton run Exe/Disciple.exe` — that is the Proton equivalent of the
    launcher's wine exec, and no `WINEDLLOVERRIDES` is involved: step 2 explains
-   why an override changes nothing here. The pack does not do this for you
+   why an override changes nothing for the renderer. The pack does not do this for you
    today.)
 
 ---
@@ -365,10 +365,10 @@ not the start-up crash above. For any recipe, in this order:
 1. **Is a wrapper claimed here?** cnc-ddraw expects the *game* to be fullscreen
    (`InWindow=0`) and presents the window itself — but **this title's renderer never loads
    it** (see "Known crash at start-up"), so no `InWindow` value and no staged DLL
-   can produce a window today. If a black screen is your symptom, the black
+   can produce a wrapper-presented game window today. If a black screen is your symptom, the black
    screen and the start-up crash are both consequences of that, not of this
    setting; `doctor`'s `ini-window` line reports the key but cannot promise a
-   window.
+   wrapper-presented window.
 2. **Override in effect (for titles that load cnc-ddraw).** `disciples-play
    doctor --game-dir …` → the `ddraw-override` line. For this title that line is
    always `INFO` — it cannot fail, and it cannot be cleared by any action, so it

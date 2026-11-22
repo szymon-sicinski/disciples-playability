@@ -108,7 +108,7 @@ paths). Environment for the child:
   override only ever falls back to builtin for the renderer, which does not load
   the staged DLL (the video player's by-name load is untested).
   The override remains valid for titles that `LoadLibrary("ddraw.dll")` by
-  name, but it is not a fix for Disciples (see
+  name, but it is not a fix for Disciples' renderer (see
   [wine-recipe.md](wine-recipe.md)).
 * `WINEDEBUG=-all` — set unless `-v`.
 
