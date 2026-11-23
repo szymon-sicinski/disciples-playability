@@ -226,10 +226,11 @@ def test_all_pass_exits_zero(
 
 
 WINE_PASS_DETAIL = (
-    "wine wine-9.0 (synthetic) (/fake/wine); plain Wine reaches this title's menu only when "
-    "the display offers a 640x480 mode, so the launcher now starts the game in a Wine virtual "
-    "desktop (--no-virtual-desktop opts out); a Proton runner is the other route that works "
-    "(see docs/wine-recipe.md)"
+    "wine wine-9.0 (synthetic) (/fake/wine); plain Wine crashed this title at start-up on "
+    "the maintainer's machine, where the 640x480 8 bpp mode change was refused; the same "
+    "command inside a Wine virtual desktop reached the menu there, so the launcher starts "
+    "the game in one (--no-virtual-desktop opts out); a Proton runner also worked for the "
+    "maintainer (see docs/wine-recipe.md)"
 )
 
 

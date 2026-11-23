@@ -87,8 +87,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "start the game in a Wine virtual desktop of this size (default: 640x480); "
-            "on by default because plain Wine on a display without a 640x480 mode "
-            "has been seen to crash the game at start-up"
+            "on by default because plain Wine crashed the game at start-up on the "
+            "maintainer's machine without one"
         ),
     )
     desktop.add_argument(

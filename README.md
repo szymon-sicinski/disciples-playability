@@ -45,7 +45,7 @@ copy-tree`.
 
 **The pack guarantees the INI, not the display.** Verified by the maintainer
 against the real GOG install: under plain `wine` (wine-staging 11.21) without a
-640x480 display mode `Disciple.exe` dies with an access violation at `0059559E`,
+virtual desktop `Disciple.exe` died on the maintainer's machine with an access violation at `0059559E`,
 with or without the cnc-ddraw wrapper staged — and the same build reaches the
 main menu inside a 640×480 Wine virtual desktop (2026-11-22), which the launcher
 now starts by default. **Heroic + Proton-GE** is the other verified route: it
@@ -112,7 +112,7 @@ disciples-play --game-dir "$HOME/Games/Disciples Gold"   # rewrite the 21 INI ke
                                                           # the game starts in a 640x480 Wine
                                                           # virtual desktop
 # a Proton runner instead: `--no-launch`, then press Play in Heroic / Lutris.
-# display already offers a 640x480 mode: add --no-virtual-desktop.
+# --no-virtual-desktop skips it (plain Wine crashed without one on the maintainer's machine).
 ```
 
 **Your files stay yours.** The pack reads your install, rewrites one INI
@@ -129,8 +129,8 @@ preset, the pinned `v7.1.0.0` fetch and the install function all exist as
 until the game's COM server is redirected. See
 [`docs/wrapper.md`](docs/wrapper.md).
 
-> **Status: plain Wine needs a 640x480 display mode — the launcher supplies one.**
-> The runs on 2026-11-21 (no such mode available) died with
+> **Status: plain Wine crashed without a virtual desktop on the maintainer's machine — the launcher starts one.**
+> The runs on 2026-11-21 (no virtual desktop) died with
 > `Exception C0000005` at `0059559E` (the faulting instruction, the failed
 > display-mode change and the open question about the dereferenced object are in
 > `docs/wine-recipe.md`) after the game logged its own start, with `InWindow=1`
@@ -145,7 +145,7 @@ until the game's COM server is redirected. See
 > The fault is analysed in
 > [`docs/wine-recipe.md`](docs/wine-recipe.md) "Start here", with the rig runs
 > (card `t_2504e165`) and
-> ["Known crash at start-up"](docs/wine-recipe.md#known-crash-at-start-up-0059559e-without-a-640x480-mode).
+> ["Known crash at start-up"](docs/wine-recipe.md#known-crash-at-start-up-0059559e-on-plain-wine-without-a-virtual-desktop).
 >
 > Inside the virtual desktop the picture sits in the top-left corner on a black
 > background — measured, cosmetic, cause unknown
@@ -197,9 +197,9 @@ until the game's COM server is redirected. See
   window, Alt+Enter/Alt+Tab, mouse targeting,
   palette animation, music without the CD, save/load, moving the install,
   `Config.exe` behaviour, a second prefix, cleanliness) await a human run.
-- Plain Wine without a 640x480 display mode: it crashes at `0059559E`
-  (maintainer, 2026-11-21, with or without the wrapper staged). With the
-  launcher's virtual desktop, or on a display that offers 640x480, it starts.
+- Plain Wine without a virtual desktop: it crashed at `0059559E` on the
+  maintainer's machine (2026-11-21, with or without the wrapper staged). With the
+  launcher's virtual desktop it started there; other displays are untested.
 - The virtual desktop's presentation: the game's surface sits in the top-left
   corner and the rest is black (measured 2026-11-22, cause unknown); the game's
   own windowed mode (`InWindow=1`) remains unsupported. A `gamescope` recipe

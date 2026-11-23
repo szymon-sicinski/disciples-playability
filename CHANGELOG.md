@@ -71,9 +71,10 @@ those eleven items are ticked.
   `.orig` backup by default, rather than describing an always-copy behaviour
   that the launcher does not have.
 - `doctor`'s `wine` line says what was measured when wine is found: plain Wine
-  reaches this title's menu only when the display offers a 640x480 mode, the
-  launcher starts the game in a Wine virtual desktop (`--no-virtual-desktop`
-  opts out), and a Proton runner is the other route that works. A fixed string
+  crashed this title at start-up on the maintainer's machine (the 640x480 8 bpp
+  mode change was refused), the same command in a Wine virtual desktop reached
+  the menu there, the launcher starts the game in one (`--no-virtual-desktop`
+  opts out), and a Proton runner also worked for the maintainer. A fixed string
   — no Proton detection, no behaviour or exit-code change.
 
 ### Fixed
@@ -132,19 +133,19 @@ those eleven items are ticked.
 - Windows as a supported target (CI green is not a play test).
 - A one-line wrapper install: the functions exist, the CLI subcommand does not.
 - That `InWindow=0` plus cnc-ddraw alone gets the game past start-up: it does
-  not — the crash happens with either `InWindow` value when the display offers
-  no 640x480 mode, which is what the launcher's virtual desktop addresses.
+  not — the crash happened with either `InWindow` value on the maintainer's
+  machine, and the launcher's virtual desktop avoided it there.
 - The `MQDB`/`.wdb` semantics still marked **H** in
   [`docs/data-layout.md`](docs/data-layout.md#open-questions).
 
 ### Known limitations
 
-- **Plain-Wine start-up crash, addressed by the launch command.** On the
+- **Plain-Wine start-up crash, worked around by the launch command.** On the
   maintainer's install (2026-11-21, GOG build, `wine-staging` 11.21, default
   `~/.wine` prefix) `Disciple.exe` dies with `C0000005` at `0059559E` — a null
   object handed back by the graphics layer — with the cnc-ddraw wrapper staged
   and `WINEDLLOVERRIDES=ddraw=n,b`, with no wrapper at all, and with
-  `InWindow=0` or `InWindow=1`, whenever the display offers no 640x480 mode.
+  `InWindow=0` or `InWindow=1`, in every run without a virtual desktop.
   `DDraw=0` (GDI fallback) starts and plays sound but leaves the screen black.
   On 2026-11-22 the same build reached the main menu inside a 640×480 Wine
   virtual desktop, which is now the launcher's default; the headless rig
@@ -157,7 +158,7 @@ those eleven items are ticked.
 - **The pack's launcher does not drive Proton.** It execs a single `wine`
   binary (`--wine` overrides it) and has no `STEAM_COMPAT_*` path, so the
   Proton route is `disciples-play --no-launch --game-dir …` and then
-  **Play** in Heroic or Lutris ([`docs/wine-recipe.md`](docs/wine-recipe.md#start-here-plain-wine-needs-a-640x480-display--the-launcher-starts-a-virtual-desktop)).
+  **Play** in Heroic or Lutris ([`docs/wine-recipe.md`](docs/wine-recipe.md#start-here-plain-wine-crashed-without-a-virtual-desktop--the-launcher-starts-one)).
   Its own launch route is the plain-Wine virtual desktop.
 - **The virtual desktop leaves the picture in its top-left corner.** Measured
   2026-11-22 on the maintainer's desktop: the game's 640×480 surface sits in the

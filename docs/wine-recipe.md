@@ -12,13 +12,15 @@
 
 ---
 
-## Start here: plain Wine needs a 640x480 display — the launcher starts a virtual desktop
+## Start here: plain Wine crashed without a virtual desktop — the launcher starts one
 
-**If `Disciple.exe` dies with an access violation at `0059559E`, the display
-mode is the problem, not your INI.** The game asks for 640×480 at 8 bits per
-pixel; plain Wine refuses that mode change when the display offers no 640x480
-resolution, and the game then faults. Put it in front of a 640x480 mode — a Wine
-virtual desktop is the cheapest way — and it reaches its own intro and menu.
+**If `Disciple.exe` dies with an access violation at `0059559E`, it is not your
+INI.** The game asks for 640×480 at 8 bits per pixel. On the maintainer's machine
+plain Wine refused that mode change (`-2`) and the game then faulted; the same
+command inside a Wine virtual desktop reached its intro and menu `[V]`, on that
+machine and in the headless rig. *Why* the change is refused is `[H]`: a missing
+640x480 resolution in the display's mode list is the hypothesis, and the mode
+list was not read.
 
 **The launcher now does that for you.** On plain `wine` it runs the game inside
 a virtual desktop:
@@ -29,7 +31,7 @@ wine explorer /desktop=Disciples,640x480 Exe/Disciple.exe
 
 `--virtual-desktop WxH` changes the size, `--no-virtual-desktop` runs the old
 direct `wine Exe/Disciple.exe` (see [`cli.md`](cli.md) and `--dry-run`, which
-prints the exact command). A Proton runner is the other route that works.
+prints the exact command). A Proton runner also worked for the maintainer.
 
 ### Measured on the maintainer's desktop
 
@@ -56,7 +58,7 @@ through a null object handed back by the graphics layer. **What precedes it is
 measured** (see "What the runs on plain `wine` showed"): COM does return an
 interface, `Initialize` and `SetCooperativeLevel` succeed, and the game's
 `SetDisplayMode(640, 480, 8)` is refused (`NtUserChangeDisplaySettings` returns
-`-2`) while the display has no 640x480 mode — the mode stays 32 bpp
+`-2`) and the mode stays 32 bpp
 (1280x1024x32 on the maintainer's trace). Whether `-2` is
 `DISP_CHANGE_BADMODE` — a missing **resolution** rather than an 8 bpp limit — is
 a hypothesis `[H]`; the rig did not dump the mode list, because it has no
@@ -137,7 +139,7 @@ fullscreen mode request differently from an ordinary window, which would explain
 both; it was not measured.
 
 To reproduce the crash instead, pass `--no-virtual-desktop` on a display that
-offers no 640x480 mode. **Nothing in this pack rewrites `DDraw`, `InWindow` or
+refuses the mode change as the maintainer's did. **Nothing in this pack rewrites `DDraw`, `InWindow` or
 the Wine binary:** the virtual desktop is an argv change, visible in
 `--print-command`.
 
@@ -194,19 +196,19 @@ disciples-play doctor --game-dir "/path/to/Disciples Gold"
 
 ---
 
-## Known crash at start-up: `0059559E` without a 640x480 mode
+## Known crash at start-up: `0059559E` on plain Wine without a virtual desktop
 
-Plain `wine` reaches the main menu when the display offers a 640x480 mode and
-dies with a `0059559E` access violation when it does not (both measured — see
-"Start here"). On 2026-11-21 the maintainer's desktop had no 640x480 mode, so
-every run there died; on 2026-11-22 the same desktop started the game inside
-`wine explorer /desktop=Disciples,640x480`. A Wine setting is not what changes
-this; the display the game is allowed to switch to is. The game acquires
+Plain `wine` died with a `0059559E` access violation on the maintainer's
+desktop on 2026-11-21, in every run; on 2026-11-22 the same desktop started the
+game inside `wine explorer /desktop=Disciples,640x480` (both measured — see
+"Start here"). The `InWindow` value, the `ddraw` override and `DDraw=0` were
+ruled out as the cause; that the *display mode* is the cause is a hypothesis
+`[H]` (the mode list was not read). The game acquires
 DirectDraw through `CoCreateInstance(CLSID_DirectDraw)` (see "What the crash
 is" below), and the one candidate Wine-side fix — register cnc-ddraw as that
 COM server — is untested.
 
-What the runs on plain `wine` showed (no virtual desktop, no 640x480 mode):
+What the runs on plain `wine` showed (no virtual desktop):
 
 ```
 Disciple.log   "Midgard (v.2000, 6, 22, 1) started on Sat Nov 21 19:13:04 2026"
@@ -242,8 +244,8 @@ remains open.
 
 | Experiment | Result |
 |---|---|
-| `[Disciple] InWindow=1` (the game's own window mode) | **crashes at `0059559E`** without a 640x480 mode |
-| `[Disciple] InWindow=0` (fullscreen, the retail baseline) | **crashes at `0059559E`** — same fault without a 640x480 mode |
+| `[Disciple] InWindow=1` (the game's own window mode) | **crashes at `0059559E`** without a virtual desktop |
+| `[Disciple] InWindow=0` (fullscreen, the retail baseline) | **crashes at `0059559E`** — same fault without a virtual desktop |
 | **B** — `WINEDLLOVERRIDES=ddraw=b` (builtin ddraw, baseline) | **[V] crashes at `0059559E`, deterministically.** `Disciple.log` = "Midgard started" (dies before sound init); frame = the crash dialog (mean 241, 74 colours); windows = game + "Wine Debugger" + "Program Error". |
 | **E5** — `WINEDLLOVERRIDES=ddraw=n` (native cnc-ddraw, **no** `,b` fallback) | **[V] same `0059559E` crash**, and Wine reports the native DLL is *never loaded*: `err:ole:apartment_add_dll couldn't load in-process dll C:\windows\system32\ddraw.dll`, then `class {D7B70EE0-4340-11CF-B063-0020AFC2CD35} not registered`. The staged `Exe\ddraw.dll` is not in that path, so `n` always falls back to builtin — exactly why the pack's `n,b` never helped. |
 | **E7** — `[Disciple] DDraw=0` (GDI fallback) | **[V] does not crash** — process alive at the 25 s kill. Frame near-black (mean 1→10, 33→52 colours); `Disciple.log` = "Midgard started" + "Sound system could not be initialized" (no audio device in the rig). Confirms "GDI starts, black screen". |
@@ -307,9 +309,9 @@ silent change would hide the setting from whoever debugs it next.
 ## 1. Plain Wine
 
 > **Starts this title when the launcher's virtual desktop is in place**
-> (maintainer, 2026-11-22); without a virtual desktop and without a 640x480 mode
-> plain `wine` crashes at `0059559E` with or without the wrapper staged — see
-> [Start here](#start-here-plain-wine-needs-a-640x480-display--the-launcher-starts-a-virtual-desktop).
+> (maintainer, 2026-11-22); without a virtual desktop
+> plain `wine` crashed on the maintainer's machine at `0059559E` with or without the wrapper staged — see
+> [Start here](#start-here-plain-wine-crashed-without-a-virtual-desktop--the-launcher-starts-one).
 > The recipe is kept because a different Wine build or prefix may behave
 > differently, and because `DDraw=0` at least starts the game (black screen).
 
@@ -368,8 +370,9 @@ disciples-play --game-dir "/path/to/Disciples Gold"
 # expected: "rewrote 21 installation keys (backup at …/Exe/DISCIPLE.INI.orig)"
 #           then Wine starts the game inside a 640x480 virtual desktop, which is
 #           what reached the main menu on the maintainer's desktop (2026-11-22).
-#           If your display already offers a 640x480 mode, --no-virtual-desktop
-#           gives the same result without the extra window.
+#           --no-virtual-desktop skips the extra window; whether the game starts
+#           without it depends on the display (untested beyond the
+#           maintainer's machine and the rig).
 ```
 
 ---
@@ -501,8 +504,8 @@ not the start-up crash above. For any recipe, in this order:
    screen and the start-up crash are both consequences of that, not of this
    setting; `doctor`'s `ini-window` line reports the key but cannot promise a
    wrapper-presented window. If the game dies at start-up with `C0000005` at
-   `0059559E` instead, you have the display-mode crash above: use the launcher's
-   default virtual desktop, or give the display a 640x480 mode.
+   `0059559E` instead, you have the start-up crash above: use the launcher's
+   default virtual desktop.
 2. **Override in effect (for titles that load cnc-ddraw).** `disciples-play
    doctor --game-dir …` → the `ddraw-override` line. For this title that line is
    always `INFO` — it cannot fail, and it cannot be cleared by any action, so it

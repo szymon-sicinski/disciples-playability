@@ -1,9 +1,9 @@
 # Quick start — three commands
 
 A clean machine with Python ≥ 3.10 and a Wine-compatible runner is enough. Plain
-`wine` works: the launcher starts the game in a 640×480 Wine virtual desktop,
-which is what reaches the menu. A **Proton** runner (Heroic, Lutris) is the other
-verified route — see [`wine-recipe.md`](wine-recipe.md) "Start here". The pack
+`wine` reached the menu on the maintainer's machine (2026-11-22) when the
+launcher started the game in a 640×480 Wine virtual desktop, which is now the
+default. A **Proton** runner (Heroic, Lutris) also worked there — see [`wine-recipe.md`](wine-recipe.md) "Start here". The pack
 has **no runtime dependencies** and needs no network access at run time.
 
 ```bash
@@ -17,7 +17,7 @@ disciples-play doctor --game-dir "$HOME/Games/Disciples Gold"
 # 3. rewrite the INI paths and start the game in a 640x480 Wine virtual desktop
 disciples-play --game-dir "$HOME/Games/Disciples Gold"
 # (a Proton runner instead: `--no-launch`, then press Play in Heroic / Lutris;
-#  your display already offers 640x480: add --no-virtual-desktop)
+#  --no-virtual-desktop skips the virtual desktop)
 ```
 
 **Your files stay yours.** The pack only reads your installation, rewrites
@@ -87,18 +87,18 @@ and it is not a different ddraw implementation (DXVK provides Direct3D, not
 known and what is open.
 [`wrapper.md`](wrapper.md) documents the preset and the digest pin.
 
-> **Known: plain Wine needs a 640x480 display mode.** Without one the game dies
-> at start-up with `Exception C0000005` at `0059559E`, the same with `InWindow=0`
-> and `InWindow=1`; the launcher now starts it in a 640×480 virtual desktop,
-> which is what reached the maintainer's main menu on 2026-11-22. Inside that
+> **Known: plain Wine crashed without a virtual desktop.** On the maintainer's
+> machine the game died at start-up with `Exception C0000005` at `0059559E`, the
+> same with `InWindow=0` and `InWindow=1`; the launcher now starts it in a
+> 640×480 virtual desktop, which reached the maintainer's main menu on 2026-11-22. Inside that
 > desktop the picture sits in the top-left corner on a black background — open,
 > cosmetic, cause unknown. See
-> [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-without-a-640x480-mode)
+> [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-on-plain-wine-without-a-virtual-desktop)
 > for the evidence.
 
 ## If something does not work
 
-- The game **crashes at start-up** (`0059559E`, access violation) → the display has no 640x480 mode: run the launcher without `--no-virtual-desktop` (the default starts a 640×480 Wine virtual desktop), or with a Proton runner via `--no-launch` + Play in Heroic/Lutris ([`wine-recipe.md`](wine-recipe.md) "Start here").
+- The game **crashes at start-up** (`0059559E`, access violation) → this is the crash seen on the maintainer's machine without a virtual desktop (cause `[H]`): run the launcher without `--no-virtual-desktop` (the default starts a 640×480 Wine virtual desktop), or with a Proton runner via `--no-launch` + Play in Heroic/Lutris ([`wine-recipe.md`](wine-recipe.md) "Start here").
 - The window is black or the game does not start → [`wine-recipe.md`](wine-recipe.md) "If the screen is black".
 - A `FAIL` from `doctor` names its own fix on the same line.
 - `disciples-play data --game-dir …` prints a read-only structural report of the

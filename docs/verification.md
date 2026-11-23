@@ -28,8 +28,8 @@ from an ordinary window; not measured). Only
 the 640x480 default has been tried on this machine.
 
 Item 1 still stays unticked: a human has to run it and tick it. Plain `wine`
-crashes at `0059559E` when the display offers no 640x480 mode (that is the
-2026-11-21 run); the launcher's virtual desktop is the pack's answer, and the
+crashed at `0059559E` on the maintainer's machine (the
+2026-11-21 run); the launcher's virtual desktop is the pack's workaround, and the
 headless rig reproduced both sides (card `t_2504e165`, R1–R7). The recipes are in
 [`wine-recipe.md`](wine-recipe.md) "Start here".
 
@@ -67,7 +67,7 @@ the trace shows is a `SetDisplayMode(640, 480, 8)` request refused immediately
 before the fault. On 2026-11-22 the same build started inside a 640×480 Wine
 virtual desktop, and the headless rig showed the same split (refused without such
 a mode, accepted with one; card `t_2504e165`). The evidence is in
-[`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-without-a-640x480-mode).
+[`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-on-plain-wine-without-a-virtual-desktop).
 Item 1 cannot be ticked until a human runs the pack's own command and records
 the result (see item 1's note) — the 2026-11-22 run is that observation, not the
 tick.
@@ -110,7 +110,7 @@ listed here rather than smoothed over; each one is visible to a user.
 | Gap | Where it bites | What would close it |
 |---|---|---|
 | **Picture sits in the top-left corner of the virtual desktop.** [V] 2026-11-22, maintainer's desktop (system Wine 11.21, `wine explorer /desktop=Disciples,640x480 Disciple.exe`, `InWindow=0`, 2560×1440 screen, KDE Plasma on Wayland): the game's 640×480 surface occupies the top-left corner, the rest of the desktop is black, there is no title bar or border, and input is 1:1 (the pointer lines up with the drawn menu). | Cosmetic, every plain-Wine launch: the game is playable but the window looks unfinished. | Cause **unknown** — not investigated; `[H]` that Xwayland/KDE treat the fullscreen mode request differently from an ordinary window (not measured). A `gamescope` recipe that does fill a centred 1920×1440 window was measured once the same day ([`wine-recipe.md`](wine-recipe.md#bigger-window-a-gamescope-recipe-not-something-the-launcher-does)) but nothing in the pack positions or scales this surface. |
-| **Plain-Wine start-up crash (`0059559E`) without a 640x480 mode.** `Disciple.exe` dies with `C0000005` — a null object from the graphics layer — under plain `wine` (wine-staging 11.21, default prefix) when the display offers no 640x480 resolution: with the wrapper staged and `WINEDLLOVERRIDES=ddraw=n,b`, with no wrapper, and with `InWindow=0` or `InWindow=1`. The rig reproduced both sides (refused `SetDisplayMode(640,480,8)` without such a mode, accepted with one; card `t_2504e165`). | `--no-virtual-desktop` on a display without a 640x480 mode: an access violation instead of a game. | **Closed for the launcher**: it now starts the game in a 640x480 Wine virtual desktop by default (verified on the maintainer's desktop 2026-11-22; rig R5–R7). The mechanism behind the refusal is still `[H]`. `DDraw=0` still starts to a black screen. |
+| **Plain-Wine start-up crash (`0059559E`) without a virtual desktop.** `Disciple.exe` dies with `C0000005` — a null object from the graphics layer — under plain `wine` (wine-staging 11.21, default prefix) on the maintainer's machine: with the wrapper staged and `WINEDLLOVERRIDES=ddraw=n,b`, with no wrapper, and with `InWindow=0` or `InWindow=1`. The rig reproduced both sides (refused `SetDisplayMode(640,480,8)` on a 1920x1440 Xvfb, accepted once a 640x480 resolution existed; card `t_2504e165`). | `--no-virtual-desktop` on the maintainer's display: an access violation instead of a game. | **Worked around by the launcher**: it now starts the game in a 640x480 Wine virtual desktop by default (verified on the maintainer's desktop 2026-11-22; rig R5–R7). The mechanism behind the refusal is still `[H]`. `DDraw=0` still starts to a black screen. |
 | **The renderer does not load the staged cnc-ddraw.** The game acquires DirectDraw through `CoCreateInstance(CLSID_DirectDraw)`, and COM resolves `HKCR\CLSID\{D7B70EE0-…}\InprocServer32` → `system32\ddraw.dll`; a DLL in `Exe\` is not on that path. Measured. (`SMACKW32.DLL`'s by-name video path is static evidence only and untested.) (The `InprocServer32` redirect named in this row's last column is **untested** — no experiment in the tree attempts it, so nothing here should be read as a ruled-out path.) | Every windowing/scaling claim, and items 2–5 entirely. | Register the DLL as `CLSID_DirectDraw`'s `InprocServer32` in the prefix (the only remaining Wine-side candidate) and re-run; or drop the wrapper from v0.2's claims. |
 | **No one-line wrapper install.** `disciples_play.wrapper` fetches the pinned `cnc-ddraw` release and writes the preset, but no CLI subcommand calls it yet. | Copying `ddraw.dll`/`ddraw.ini` into `Exe/` by hand is the only way to stage it — and for the renderer that changes nothing, because it never loads it (row above; the video player's by-name load is untested). The missing command is a packaging gap, not a path to a window. | A `disciples-play wrapper --install` card (needs `--game-dir`, the digest pin, the licence text, an overwrite guard — all already implemented as functions) — worth doing for the titles that *do* load ddraw by name. |
 | **Windows is unclaimed.** CI runs the suite on `windows-latest` 3.10–3.13, but no human has launched the game on Windows. | Any "works on Windows" reading of a green CI badge. | One run on a Windows machine; then update this file and the README. |
