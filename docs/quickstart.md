@@ -29,8 +29,8 @@ anywhere, and never modifies anything outside that one INI unless you pass
 
 ## What each command does
 
-**`disciples-play doctor --game-dir …`** prints one `PASS`/`FAIL`/`WARN` line
-per check — install resolves, INI writable, installation paths absolute,
+**`disciples-play doctor --game-dir …`** prints one `PASS`/`FAIL`/`WARN`/`INFO`
+line per check — install resolves, INI writable, installation paths absolute,
 `wine` present, `ddraw` override, wrapper staged, the INI's own `InWindow`
 window mode, music count, video count, display, and whether `gamescope` is on
 `PATH` (always `INFO`: only `--scale` needs it) — with a one-line fix hint on
