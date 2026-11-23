@@ -95,8 +95,9 @@ always offers the standard resolutions; that was not measured.
 game's picture occupies the top-left corner and the rest of the desktop is
 black. Why is not known: the session is KDE Plasma on **Wayland** (reported by
 the maintainer the same day), and `[H]` Xwayland/KDE handle the fullscreen mode
-request differently from an ordinary window — not measured. The pack does not
-scale anything (the `gamescope` recipe below was measured once); the game's own
+request differently from an ordinary window — not measured. The pack's default
+launch does not scale anything; the opt-in `--scale N` below wraps it in gamescope
+(measured once, on that machine, at 3×); the game's own
 windowed mode (`InWindow=1`) remains unsupported. Only the 640x480 default
 was tried on a real desktop; the other sizes above were exercised in the rig
 only.
@@ -517,8 +518,9 @@ not the start-up crash above. For any recipe, in this order:
    `--no-virtual-desktop`, the game's 640×480 surface sits in the top-left corner
    of a black desktop — measured on the maintainer's desktop (2026-11-22), cause
    unknown. The game itself is fine (the menu responds); this is cosmetic and is
-   listed as an open limitation in [`verification.md`](verification.md). Nothing
-   in this pack positions or scales that surface yet.
+   listed as an open limitation in [`verification.md`](verification.md). The
+   default launch does not position or scale that surface; the opt-in `--scale N`
+   (see "A bigger window" above) wraps the launch in gamescope.
 1. **Is a wrapper claimed here?** cnc-ddraw expects the *game* to be fullscreen
    (`InWindow=0`) and presents the window itself — but **this title's renderer never loads
    it** (see "Known crash at start-up"), so no `InWindow` value and no staged DLL
