@@ -7,6 +7,7 @@ trees are synthetic ``tmp_path`` fixtures -- no game bytes.
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 
 import pytest
@@ -249,14 +250,16 @@ def test_build_launch_without_virtual_desktop_is_plain_wine(
     install, cmd = _launch_for(tmp_path, monkeypatch, virtual_desktop=None)
     assert cmd.argv == ["/fake/wine", str(install.exe_path)]
     assert "explorer" not in cmd.argv
-    assert cmd.display == f"wine {install.exe_path}"
+    assert cmd.display == shlex.join(["wine", str(install.exe_path)])
 
 
 def test_build_launch_display_shows_virtual_desktop(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     install, cmd = _launch_for(tmp_path, monkeypatch)
-    assert cmd.display == f"wine explorer /desktop=Disciples,640x480 {install.exe_path}"
+    assert cmd.display == shlex.join(
+        ["wine", "explorer", "/desktop=Disciples,640x480", str(install.exe_path)]
+    )
 
 
 @pytest.mark.parametrize(
