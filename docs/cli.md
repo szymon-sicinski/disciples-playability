@@ -34,6 +34,7 @@ disciples-play --version
 | `--wine PATH` | The wine binary (bare name is looked up on `PATH`). Default: `wine`. |
 | `--virtual-desktop WxH` | Size of the Wine virtual desktop the game runs in. Default `640x480`. `WxH` is validated strictly — two whole numbers in 1…16384, e.g. `800x600` — and anything else exits `2` with one line. Only `640x480` has been observed on a real desktop; the other sizes were exercised in the headless rig only. |
 | `--no-virtual-desktop` | Exec `wine` directly, without a virtual desktop (the behaviour before this option existed). Mutually exclusive with `--virtual-desktop`. |
+| `--scale N` | Wrap the launch in `gamescope` and scale the picture by `N`: a whole number `1…4`, where `1` is off and the default. `--scale 3` runs `gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- wine explorer /desktop=Disciples,640x480 Exe/Disciple.exe`; with `--virtual-desktop WxH` that size is the base (`-w W -h H -W W*3 -H H*3`), and with `--no-virtual-desktop` the base is the game's own 640×480 surface. Needs `gamescope` on `PATH`: when it is missing the command exits `2` with one line naming it and the install hint, and nothing is launched. Measured once on the maintainer's machine (2026-11-22, KDE Plasma on Wayland, 2560×1440, gamescope 3.16.23.2+, system Wine 11.21): a centred 1920×1440 window, the 640×480 picture filling it, and clicks landing on the item under the cursor — that is the 3× scale. Only 3× was observed; `2×`/`4×`, `-f` (fullscreen), X11, audio and Alt+Tab were not tested. |
 | `--path-style {wine,relative}` | How installation paths are written. Default `wine` (absolute Windows paths — the proven-working form). `relative` (bare folder names) is kept for the portability experiment and is currently **falsified** in game; see the plan §7 R1 / §9 Q1. |
 | `--ini-mode {backup,inplace,copy-tree}` | How `DISCIPLE.INI` is updated. Default `backup`. |
 | `--no-launch` | Rewrite the INI but do not start the game. |
@@ -106,9 +107,12 @@ The argv is `wine explorer /desktop=Disciples,640x480 <install>/Exe/Disciple.exe
 — by default the game runs inside a Wine virtual desktop, because plain Wine
 crashed this title at start-up on the maintainer's machine (see [`wine-recipe.md`](wine-recipe.md#start-here-plain-wine-crashed-without-a-virtual-desktop--the-launcher-starts-one)).
 `--virtual-desktop WxH` changes the size; `--no-virtual-desktop` restores the
-plain `wine <exe>` argv. Run with working directory `<install>/Exe` (the
-known-good baseline: `Exe/` cwd **plus** absolute INI paths). Environment for
-the child:
+plain `wine <exe>` argv. `--scale N` (1…4, off by default) wraps that whole wine
+command in `gamescope … -S integer -- …` and is the only part of the launch that
+scales anything: it is what turns the fixed 640×480 surface into a bigger
+window; see `--scale` in the flag table. Run with working directory
+`<install>/Exe` (the known-good baseline: `Exe/` cwd **plus** absolute INI
+paths). Environment for the child:
 
 * `WINEDLLOVERRIDES=ddraw=n,b` — set only when `ddraw.dll` sits next to the exe
   (the cnc-ddraw wrapper staged by M3). An existing `WINEDLLOVERRIDES` that
@@ -146,6 +150,7 @@ than a hand-made prefix. The checks, in order:
 | `music` | 25 `.wav` files in `Music/` (count and size only) |
 | `video` | 41 `.smk` cutscenes — 6 in `Video/` + 35 in `Briefing/` (count and size only) |
 | `display` | an X display is available (WARN "no X display: cannot verify windowing" when `DISPLAY` is unset) |
+| `gamescope` | whether `gamescope` is on `PATH` — **always `INFO`**: "found at …" or "not found … (install it: dnf install gamescope / apt install gamescope)", both followed by "only needed for `--scale`". The default launch does not use it, so its absence blocks nothing: it never WARNs or FAILs and cannot change the exit code. |
 
 **Hard rule:** the doctor reports paths, sizes, counts, versions and existence.
 It never prints a hash of a game binary and never dumps content. The one digest
@@ -163,8 +168,9 @@ Doctor exit codes: `0` no check failed, `1` any check failed, `2` bad
 arguments. A `WARN` never fails the run, but the checks that block play are
 FAILs: a missing `wine` on POSIX is a FAIL (exit `1`), not a WARN, because the
 launcher cannot run without it. `INFO` marks a check that is true but
-actionable by nobody (for this title, `ddraw-override`): it never fails the run
-and carries no fix hint, because there is nothing to fix. `--game-dir` may
+actionable by nobody (for this title, `ddraw-override`) or one that only an
+optional flag needs (`gamescope`, for `--scale`): it never fails the run and
+carries no fix hint, because there is nothing to fix. `--game-dir` may
 appear before or after the `doctor` subcommand. The doctor is read-only — it
 never writes into the install. `ok` in the JSON output is `true` when no check
 FAILs (WARNs and INFO do not flip it).
@@ -204,7 +210,7 @@ The report layout and every measured number are documented in
 |---|---|
 | `0` | Success (also `--help`/`--version`, `--dry-run`, `--print-command`, `--no-launch`). |
 | `1` | `data` only: at least one file could not be parsed. The report still prints, with per-file `error` entries. |
-| `2` | Bad command line, or a bad/missing install — the message lists what is missing and the exact search paths tried. |
+| `2` | Bad command line (including a `--virtual-desktop`/`--scale` value out of range, or `--scale` on a machine without `gamescope`), or a bad/missing install — the message lists what is missing and the exact search paths tried. |
 | `3` | Rewrite refused — the INI is not writable, or the `copy-tree` target already exists / could not be copied. |
 | `4` | Wine not found (launch only). |
 

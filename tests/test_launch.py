@@ -262,6 +262,155 @@ def test_build_launch_display_shows_virtual_desktop(
     )
 
 
+# --- --scale N (gamescope) ---------------------------------------------------
+
+
+def _scale_launch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    scale: int,
+    virtual_desktop: tuple[int, int] | None = launch.DEFAULT_VIRTUAL_DESKTOP,
+    gamescope: str | None = "/fake/gamescope",
+):
+    """Build a launch with ``scale``, resolving wine and gamescope synthetically."""
+
+    def which(name: str) -> str | None:
+        if name == launch.GAMESCOPE_PROGRAM:
+            return gamescope
+        return "/fake/wine" if name == "wine" else None
+
+    monkeypatch.setattr(launch.shutil, "which", which)
+    install = launch.resolve_install(make_install(tmp_path / "install"))
+    return install, launch.build_launch(install, "wine", False, virtual_desktop, scale=scale)
+
+
+@pytest.mark.parametrize("scale", [2, 3, 4])
+def test_scale_wraps_the_virtual_desktop_command_in_gamescope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scale: int
+) -> None:
+    install, cmd = _scale_launch(tmp_path, monkeypatch, scale=scale)
+    # The whole argv is pinned: dropping ``-S integer`` or the ``--`` separator
+    # must fail this test, not just change the picture.
+    assert cmd.argv == [
+        "/fake/gamescope",
+        "-w",
+        "640",
+        "-h",
+        "480",
+        "-W",
+        str(640 * scale),
+        "-H",
+        str(480 * scale),
+        "-S",
+        "integer",
+        "--",
+        "/fake/wine",
+        "explorer",
+        "/desktop=Disciples,640x480",
+        str(install.exe_path),
+    ]
+
+
+def test_scale_argv_pins_integer_scaling_and_the_separator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A named assertion for the two flags a mutation would otherwise only blur."""
+    _, cmd = _scale_launch(tmp_path, monkeypatch, scale=3)
+    assert cmd.argv[9:11] == ["-S", "integer"]
+    assert cmd.argv[11] == "--"  # everything after it is the wrapped wine command
+    assert cmd.argv[12] == "/fake/wine"
+
+
+def test_scale_1_is_off(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    install, cmd = _scale_launch(tmp_path, monkeypatch, scale=1, gamescope=None)
+    assert cmd.argv == [
+        "/fake/wine",
+        "explorer",
+        "/desktop=Disciples,640x480",
+        str(install.exe_path),
+    ]
+    assert cmd.display == shlex.join(
+        ["wine", "explorer", "/desktop=Disciples,640x480", str(install.exe_path)]
+    )
+
+
+def test_scale_uses_the_virtual_desktop_size_as_the_base(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, cmd = _scale_launch(tmp_path, monkeypatch, scale=2, virtual_desktop=(800, 600))
+    assert cmd.argv[1:11] == ["-w", "800", "-h", "600", "-W", "1600", "-H", "1200", "-S", "integer"]
+    assert "/desktop=Disciples,800x600" in cmd.argv
+
+
+def test_scale_without_virtual_desktop_uses_the_game_surface(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install, cmd = _scale_launch(tmp_path, monkeypatch, scale=3, virtual_desktop=None)
+    assert cmd.argv[1:11] == ["-w", "640", "-h", "480", "-W", "1920", "-H", "1440", "-S", "integer"]
+    assert cmd.argv[11] == "--"
+    assert cmd.argv[12:] == ["/fake/wine", str(install.exe_path)]
+
+
+def test_scale_display_shows_gamescope_and_the_wine_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install, cmd = _scale_launch(tmp_path, monkeypatch, scale=3)
+    assert shlex.split(cmd.display) == [
+        "gamescope",
+        "-w",
+        "640",
+        "-h",
+        "480",
+        "-W",
+        "1920",
+        "-H",
+        "1440",
+        "-S",
+        "integer",
+        "--",
+        "wine",
+        "explorer",
+        "/desktop=Disciples,640x480",
+        str(install.exe_path),
+    ]
+
+
+def test_scale_without_gamescope_is_exit_2_one_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with pytest.raises(launch.CliError) as exc:
+        _scale_launch(tmp_path, monkeypatch, scale=2, gamescope=None)
+    assert exc.value.exit_code == 2
+    assert "gamescope not found" in exc.value.message
+    assert "dnf install gamescope" in exc.value.message
+    assert "apt install gamescope" in exc.value.message
+    assert "\n" not in exc.value.message
+
+
+def test_build_launch_rejects_an_out_of_range_scale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with pytest.raises(launch.CliError) as exc:
+        _scale_launch(tmp_path, monkeypatch, scale=5)
+    assert exc.value.exit_code == 2
+    assert "--scale" in exc.value.message
+
+
+@pytest.mark.parametrize(("value", "expected"), [("1", 1), ("2", 2), ("4", 4), ("03", 3)])
+def test_parse_scale_accepts(value: str, expected: int) -> None:
+    assert launch.parse_scale(value) == expected
+
+
+@pytest.mark.parametrize("value", ["", "0", "5", "-1", "a", "1.5", " 3", "+3", "٣"])
+def test_parse_scale_rejects(value: str) -> None:
+    with pytest.raises(launch.CliError) as excinfo:
+        launch.parse_scale(value)
+    assert excinfo.value.exit_code == 2
+    assert "\n" not in excinfo.value.message
+    assert repr(value) in excinfo.value.message
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [

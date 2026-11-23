@@ -22,6 +22,7 @@ import pytest
 
 import disciples_play
 import disciples_play.ini as ini
+from disciples_play import launch
 from disciples_play.__main__ import main
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -204,6 +205,179 @@ def test_dry_run_command_line_carries_virtual_desktop(tmp_path: Path, capsys) ->
     lines = capsys.readouterr().out.splitlines()
     command = next(line for line in lines if line.startswith("command:"))
     assert "explorer /desktop=Disciples,640x480" in command
+
+
+# --- --scale N (gamescope) --------------------------------------------------
+
+
+def _patch_gamescope(monkeypatch: pytest.MonkeyPatch, found: str | None) -> None:
+    """Make the gamescope lookup answer ``found`` and leave every other name alone."""
+    real_which = shutil.which
+
+    def which(name: str) -> str | None:
+        if name == launch.GAMESCOPE_PROGRAM:
+            return found
+        return real_which(name)
+
+    monkeypatch.setattr(shutil, "which", which)
+
+
+def test_print_command_with_scale_is_copy_pasteable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    root = make_install(tmp_path / "install")
+    _patch_gamescope(monkeypatch, "/fake/gamescope")
+
+    assert main(["--game-dir", str(root), "--print-command", "--scale", "3"]) == 0
+
+    out = capsys.readouterr().out.strip()
+    assert shlex.split(out) == [
+        "gamescope",
+        "-w",
+        "640",
+        "-h",
+        "480",
+        "-W",
+        "1920",
+        "-H",
+        "1440",
+        "-S",
+        "integer",
+        "--",
+        "wine",
+        "explorer",
+        "/desktop=Disciples,640x480",
+        str(root / "Exe" / "Disciple.exe"),
+    ]
+
+
+def test_print_command_scale_uses_the_virtual_desktop_size(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    root = make_install(tmp_path / "install")
+    _patch_gamescope(monkeypatch, "/fake/gamescope")
+
+    argv = ["--game-dir", str(root), "--print-command", "--scale", "2"]
+    assert main([*argv, "--virtual-desktop", "800x600"]) == 0
+
+    words = shlex.split(capsys.readouterr().out.strip())
+    assert words[:11] == [
+        "gamescope",
+        "-w",
+        "800",
+        "-h",
+        "600",
+        "-W",
+        "1600",
+        "-H",
+        "1200",
+        "-S",
+        "integer",
+    ]
+    assert "/desktop=Disciples,800x600" in words
+
+
+def test_print_command_scale_with_no_virtual_desktop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    root = make_install(tmp_path / "install")
+    _patch_gamescope(monkeypatch, "/fake/gamescope")
+
+    argv = ["--game-dir", str(root), "--print-command", "--scale", "2"]
+    assert main([*argv, "--no-virtual-desktop"]) == 0
+
+    words = shlex.split(capsys.readouterr().out.strip())
+    assert words[:11] == [
+        "gamescope",
+        "-w",
+        "640",
+        "-h",
+        "480",
+        "-W",
+        "1280",
+        "-H",
+        "960",
+        "-S",
+        "integer",
+    ]
+    assert words[12:] == ["wine", str(root / "Exe" / "Disciple.exe")]
+
+
+def test_print_command_scale_1_is_off_without_gamescope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    root = make_install(tmp_path / "install")
+    _patch_gamescope(monkeypatch, None)
+
+    assert main(["--game-dir", str(root), "--print-command", "--scale", "1"]) == 0
+
+    words = shlex.split(capsys.readouterr().out.strip())
+    assert words == [
+        "wine",
+        "explorer",
+        "/desktop=Disciples,640x480",
+        str(root / "Exe" / "Disciple.exe"),
+    ]
+
+
+def test_dry_run_command_line_carries_gamescope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    root = make_install(tmp_path / "install")
+    _patch_gamescope(monkeypatch, "/fake/gamescope")
+
+    assert main(["--game-dir", str(root), "--dry-run", "--scale", "3"]) == 0
+
+    lines = capsys.readouterr().out.splitlines()
+    command = next(line for line in lines if line.startswith("command:"))
+    assert command.startswith(
+        "command: gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- wine "
+    )
+
+
+def test_scale_without_gamescope_exits_2_one_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    root = make_install(tmp_path / "install")
+    _patch_gamescope(monkeypatch, None)
+
+    assert main(["--game-dir", str(root), "--print-command", "--scale", "2"]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    err_lines = captured.err.splitlines()
+    assert len(err_lines) == 1
+    assert "gamescope not found" in err_lines[0]
+    assert "dnf install gamescope" in err_lines[0] and "apt install gamescope" in err_lines[0]
+    assert "Traceback" not in captured.err
+
+
+def test_dry_run_scale_without_gamescope_prints_nothing_on_stdout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    root = make_install(tmp_path / "install")
+    _patch_gamescope(monkeypatch, None)
+
+    assert main(["--game-dir", str(root), "--dry-run", "--scale", "2"]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert len(captured.err.splitlines()) == 1
+    assert "gamescope not found" in captured.err
+
+
+@pytest.mark.parametrize("value", ["", "0", "5", "-1", "a"])
+def test_bad_scale_exits_2_one_line(tmp_path: Path, capsys, value: str) -> None:
+    root = make_install(tmp_path / "install")
+    # `=` form: a leading `-` value would otherwise be read as an option.
+    assert main(["--game-dir", str(root), "--print-command", f"--scale={value}"]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    err_lines = captured.err.splitlines()
+    assert len(err_lines) == 1
+    assert err_lines[0].startswith("disciples-play: ")
+    assert "--scale" in err_lines[0]
+    assert "Traceback" not in captured.err
 
 
 @pytest.mark.parametrize("value", ["", "0x0", "640", "axb", "-640x480", "99999x99999"])

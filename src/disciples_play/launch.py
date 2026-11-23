@@ -4,14 +4,17 @@ This module has no CLI concerns (no ``argparse``); :mod:`disciples_play.cli`
 parses arguments and drives these functions. It resolves the install the user
 points at -- tolerating a copied retail folder dropped one or two levels down
 -- re-points ``Exe/DISCIPLE.INI`` at the install's actual location via M1's
-:mod:`disciples_play.ini`, then launches ``wine Exe/Disciple.exe``.
+:mod:`disciples_play.ini`, then launches ``wine Exe/Disciple.exe``. An opt-in
+``--scale N`` wraps that command in ``gamescope`` (integer scaling of the
+640x480 surface); without it the launch is unchanged.
 
 Nothing here reads game content: only paths, one INI file it rewrites, and the
 presence of a ``ddraw.dll`` next to the exe (the cnc-ddraw wrapper, staged by
 M3) to decide whether to set ``WINEDLLOVERRIDES=ddraw=n,b``. The exit codes are
 a contract shared with :mod:`disciples_play.cli` and ``docs/cli.md``:
 
-* ``2`` -- bad or missing install (handled here, raised as :class:`CliError`)
+* ``2`` -- bad or missing install, a bad ``--scale``, or ``--scale`` asked for
+  on a machine without ``gamescope`` (handled here, raised as :class:`CliError`)
 * ``3`` -- rewrite refused (INI not writable, copy-tree target exists)
 * ``4`` -- wine not found (launch only)
 """
@@ -48,6 +51,26 @@ DEFAULT_VIRTUAL_DESKTOP = (640, 480)
 #: Upper bound for either edge, so a typo cannot ask Wine for a 10-metre desktop.
 MAX_VIRTUAL_DESKTOP_EDGE = 16384
 
+#: The scaler ``--scale`` wraps the launch in. Looked up on ``PATH``; the name
+#: is a constant, never a user-supplied string.
+GAMESCOPE_PROGRAM = "gamescope"
+#: The highest integer scale ``--scale`` accepts (4 x 640x480 = 2560x1920).
+MAX_SCALE = 4
+#: gamescope's "integer scaling only" selector (``-S integer``). A constant.
+GAMESCOPE_SCALING = "integer"
+#: Separates gamescope's own options from the command it wraps.
+GAMESCOPE_COMMAND_SEPARATOR = "--"
+#: The one-line message for a missing gamescope: names the program and the fix.
+GAMESCOPE_MISSING = (
+    "gamescope not found on PATH; --scale needs it "
+    "(install it: dnf install gamescope / apt install gamescope)"
+)
+
+#: The ``--scale`` error message; ``{value}`` is the rejected value.
+_SCALE_ERROR = (
+    f"--scale expects a whole number in 1..{MAX_SCALE} (1 turns scaling off); got {{value!r}}"
+)
+
 
 class CliError(Exception):
     """A user-facing failure carrying its documented process exit code."""
@@ -75,6 +98,22 @@ def parse_virtual_desktop(value: str) -> tuple[int, int]:
     if not (1 <= width <= MAX_VIRTUAL_DESKTOP_EDGE and 1 <= height <= MAX_VIRTUAL_DESKTOP_EDGE):
         raise error
     return width, height
+
+
+def parse_scale(value: str) -> int:
+    """Parse ``--scale`` -- a whole number ``1..MAX_SCALE`` -- or raise ``CliError`` (exit 2).
+
+    ``1`` means "off": the launch is the plain wine command, exactly as without
+    the flag. Only ASCII digits are accepted, so ``-1``, ``+3`` and `` 3`` are
+    rejected rather than read as 1, 3 and 3.
+    """
+    error = CliError(2, _SCALE_ERROR.format(value=value))
+    if not value or not (value.isascii() and value.isdigit()):
+        raise error
+    scale = int(value)
+    if not 1 <= scale <= MAX_SCALE:
+        raise error
+    return scale
 
 
 @dataclass(frozen=True)
@@ -325,6 +364,10 @@ class LaunchCommand:
     env: dict[str, str]
     #: ``(width, height)`` of the Wine virtual desktop, or ``None`` to exec wine directly.
     virtual_desktop: tuple[int, int] | None = DEFAULT_VIRTUAL_DESKTOP
+    #: Integer scale applied by gamescope; ``1`` means off (the command is plain wine).
+    scale: int = 1
+    #: The resolved ``gamescope`` executable; ``None`` when ``scale`` is 1.
+    gamescope_path: str | None = None
 
     def _tail(self) -> list[str]:
         if self.virtual_desktop is None:
@@ -332,15 +375,45 @@ class LaunchCommand:
         w, h = self.virtual_desktop
         return ["explorer", f"/desktop={VIRTUAL_DESKTOP_NAME},{w}x{h}", str(self.exe_path)]
 
-    @property
-    def argv(self) -> list[str]:
+    def _gamescope_args(self) -> list[str]:
+        """gamescope's own options, up to and including the ``--`` separator.
+
+        The source size is the virtual-desktop size when one is in use, else the
+        game's own 640x480 surface (``--no-virtual-desktop --scale N``).
+        """
+        width, height = self.virtual_desktop or DEFAULT_VIRTUAL_DESKTOP
+        return [
+            "-w",
+            str(width),
+            "-h",
+            str(height),
+            "-W",
+            str(width * self.scale),
+            "-H",
+            str(height * self.scale),
+            "-S",
+            GAMESCOPE_SCALING,
+            GAMESCOPE_COMMAND_SEPARATOR,
+        ]
+
+    def _wine_argv(self) -> list[str]:
         assert self.wine_path is not None, "argv is only defined once wine resolves"
         return [self.wine_path, *self._tail()]
 
     @property
+    def argv(self) -> list[str]:
+        if self.scale == 1:
+            return self._wine_argv()
+        assert self.gamescope_path is not None, "scale > 1 requires a resolved gamescope"
+        return [self.gamescope_path, *self._gamescope_args(), *self._wine_argv()]
+
+    @property
     def display(self) -> str:
         """The shell-quoted command line a human can copy and paste."""
-        return shlex.join([self.wine_name, *self._tail()])
+        wine_command = [self.wine_name, *self._tail()]
+        if self.scale == 1:
+            return shlex.join(wine_command)
+        return shlex.join([GAMESCOPE_PROGRAM, *self._gamescope_args(), *wine_command])
 
 
 def wrapper_staged(exe_dir: Path) -> bool:
@@ -387,6 +460,15 @@ def resolve_wine(wine: str | None) -> str | None:
     return shutil.which(name)
 
 
+def resolve_gamescope() -> str | None:
+    """Return the ``gamescope`` executable on ``PATH``, or ``None``.
+
+    Only ``--scale`` needs it: the default launch is a plain wine command, and
+    a machine without gamescope runs that unchanged.
+    """
+    return shutil.which(GAMESCOPE_PROGRAM)
+
+
 def build_env(install: Install, verbose: bool) -> dict[str, str]:
     """The child environment for the game process."""
     env = os.environ.copy()
@@ -406,10 +488,27 @@ def build_launch(
     wine_name: str,
     verbose: bool,
     virtual_desktop: tuple[int, int] | None = DEFAULT_VIRTUAL_DESKTOP,
+    scale: int = 1,
 ) -> LaunchCommand:
-    """Assemble the launch command (without running it)."""
+    """Assemble the launch command (without running it).
+
+    ``scale`` > 1 wraps the wine command in ``gamescope`` and needs the program
+    on ``PATH``; when it is missing this raises ``CliError`` (exit 2) instead of
+    building a command that cannot run.
+    """
+    if not 1 <= scale <= MAX_SCALE:
+        raise CliError(2, _SCALE_ERROR.format(value=scale))
+
+    gamescope_path = None
+    if scale > 1:
+        gamescope_path = resolve_gamescope()
+        if gamescope_path is None:
+            raise CliError(2, GAMESCOPE_MISSING)
+
     return LaunchCommand(
         virtual_desktop=virtual_desktop,
+        scale=scale,
+        gamescope_path=gamescope_path,
         wine_name=wine_name,
         wine_path=resolve_wine(wine_name),
         exe_path=install.exe_path,

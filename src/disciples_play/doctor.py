@@ -45,6 +45,8 @@ The checks, in output order:
 ``music``        25 ``.wav`` files in ``Music/``
 ``video``        41 ``.smk`` cutscenes (6 ``Video/`` + 35 ``Briefing/``)
 ``display``      an X display is available to verify windowing
+``gamescope``    ``gamescope`` on PATH or not -- always INFO: only ``--scale``
+                 needs it, so its absence blocks nothing
 ===============  ==============================================================
 """
 
@@ -234,6 +236,9 @@ def run_doctor(candidate: str | os.PathLike[str], wine_name: str = "wine") -> Re
 
     # --- display ----------------------------------------------------------
     checks.append(_display_check())
+
+    # --- gamescope (only --scale needs it) --------------------------------
+    checks.append(_gamescope_check())
 
     return Report(checks=tuple(checks))
 
@@ -591,6 +596,28 @@ def _display_check() -> Check:
     if display:
         return Check("display", PASS, f"DISPLAY is set ({display})")
     return Check("display", WARN, "no X display: cannot verify windowing")
+
+
+def _gamescope_check() -> Check:
+    """Report whether ``gamescope`` is on ``PATH`` -- always ``INFO``.
+
+    Only ``--scale`` needs it: the default launch is a plain wine command in a
+    virtual desktop, which works without it. So its absence blocks nothing, and
+    the line never WARNs or FAILs -- it cannot change the exit code.
+    """
+    path = shutil.which(launch.GAMESCOPE_PROGRAM)
+    if path is None:
+        return Check(
+            "gamescope",
+            INFO,
+            f"{launch.GAMESCOPE_PROGRAM} not found on PATH; only needed for --scale "
+            "(install it: dnf install gamescope / apt install gamescope)",
+        )
+    return Check(
+        "gamescope",
+        INFO,
+        f"{launch.GAMESCOPE_PROGRAM} found at {path}; only needed for --scale",
+    )
 
 
 # --------------------------------------------------------------------------

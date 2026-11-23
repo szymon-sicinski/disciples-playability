@@ -29,10 +29,11 @@ anywhere, and never modifies anything outside that one INI unless you pass
 
 ## What each command does
 
-**`disciples-play doctor --game-dir …`** prints one `PASS`/`FAIL`/`WARN` line
-per check — install resolves, INI writable, installation paths absolute,
+**`disciples-play doctor --game-dir …`** prints one `PASS`/`FAIL`/`WARN`/`INFO`
+line per check — install resolves, INI writable, installation paths absolute,
 `wine` present, `ddraw` override, wrapper staged, the INI's own `InWindow`
-window mode, music count, video count, display — with a one-line fix hint on
+window mode, music count, video count, display, and whether `gamescope` is on
+`PATH` (always `INFO`: only `--scale` needs it) — with a one-line fix hint on
 every non-PASS line. Exit `0` means no
 check failed (warnings do not fail it); `1` means something blocks play; `2` is
 a bad command line. It is read-only.
@@ -51,24 +52,24 @@ Exit codes: `0` success, `2` bad/missing install, `3` the INI could not be
 written, `4` Wine not found. The full contract is in
 [`cli.md`](cli.md).
 
-**Bigger window, centred — a recipe, not a launcher flag.** Wrap the whole
-command in `gamescope`, from the install's `Exe/`:
+**Bigger window.** `--scale 3` wraps the launch in
+[gamescope](https://github.com/ValveSoftware/gamescope) and presents the
+640×480 picture in a centred 1920×1440 window with integer scaling:
 
 ```bash
-gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- \
-    wine explorer /desktop=Disciples,640x480 Disciple.exe
+disciples-play --game-dir "$HOME/Games/Disciples Gold" --scale 3
 ```
 
-Measured 2026-11-22 (KDE Plasma on Wayland, 2560×1440 monitor, system Wine
-11.21, `InWindow=0`): a **1920×1440** window, centred, with the game picture
-filling it — exactly 3× — and clicking menu items hits the item under the
-cursor (gamescope 3.16.23.2+). Adding `-F nearest` made the pixel edges more
-visible; the maintainer did not find it better looking, so the recipe keeps the
-default filter. Audio, a full session and Alt+Tab inside gamescope were **not**
-assessed. Details and the not-tried list:
-[`wine-recipe.md`](wine-recipe.md#bigger-window-a-gamescope-recipe-not-something-the-launcher-does).
-There is no `--gamescope` flag; the launcher only chooses the virtual-desktop
-size.
+`--scale` takes a whole number 1…4; `1` is off (the default). It needs
+`gamescope` on `PATH` (`sudo dnf install gamescope` / `sudo apt install
+gamescope`); when it is missing the command exits `2` with one line and launches
+nothing. Measured once on the maintainer's machine (2026-11-22/23, KDE Plasma on
+Wayland, 2560×1440, gamescope 3.16.23.2+, system Wine 11.21): the window is
+1920×1440 and centred, the game picture fills it — exactly 3× — and clicking
+menu items hits the item under the cursor. Only 3× was observed: `2×`/`4×`,
+`-f` (fullscreen), an X11 session, audio, Alt+Tab and a full play session were
+**not** assessed — read [`wine-recipe.md`](wine-recipe.md#a-bigger-window---scale-n)
+before quoting this as working.
 
 ## Getting the window (cnc-ddraw)
 

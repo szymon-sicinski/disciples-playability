@@ -97,6 +97,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="exec wine directly, without a virtual desktop (the pre-change behaviour)",
     )
     parser.add_argument(
+        "--scale",
+        metavar="N",
+        default=None,
+        help=(
+            "scale the picture in a gamescope window (whole number 1..4; 1 = off, the "
+            "default): --scale 3 turns the 640x480 surface into 1920x1440 with integer "
+            "scaling. Needs gamescope on PATH; --print-command/--dry-run show the "
+            "whole command"
+        ),
+    )
+    parser.add_argument(
         "--path-style",
         choices=("wine", "relative"),
         default="wine",
@@ -230,7 +241,12 @@ def _print_dry_run(
     install: launch.Install,
     ns: argparse.Namespace,
     virtual_desktop: tuple[int, int] | None,
+    scale: int,
 ) -> None:
+    # Build the command first: a --scale that cannot run (bad value, no
+    # gamescope) must exit 2 with one line and no half report on stdout.
+    cmd = launch.build_launch(install, ns.wine or "wine", ns.verbose, virtual_desktop, scale)
+
     result = launch.compute_rewrite(install, ns.path_style)
     if result.changed == 0:
         print(f"{install.ini_path}: already up to date; nothing to rewrite")
@@ -238,7 +254,6 @@ def _print_dry_run(
         print(f"{install.ini_path}: {result.changed} of 21 installation keys would change:")
         print(launch.format_ini_diff(result.before, result.after))
 
-    cmd = launch.build_launch(install, ns.wine or "wine", ns.verbose, virtual_desktop)
     print(f"command: {cmd.display}")
     print(f"cwd: {cmd.cwd}")
     overrides = launch.env_overrides(cmd)
@@ -254,15 +269,16 @@ def run(ns: argparse.Namespace) -> int:
         virtual_desktop = launch.DEFAULT_VIRTUAL_DESKTOP
     else:
         virtual_desktop = launch.parse_virtual_desktop(ns.virtual_desktop)
+    scale = 1 if ns.scale is None else launch.parse_scale(ns.scale)
     install = launch.resolve_install(Path(resolve_game_dir(ns)))
 
     if ns.print_command:
-        cmd = launch.build_launch(install, ns.wine or "wine", ns.verbose, virtual_desktop)
+        cmd = launch.build_launch(install, ns.wine or "wine", ns.verbose, virtual_desktop, scale)
         print(cmd.display)
         return EXIT_OK
 
     if ns.dry_run:
-        _print_dry_run(install, ns, virtual_desktop)
+        _print_dry_run(install, ns, virtual_desktop, scale)
         return EXIT_OK
 
     result = launch.apply_rewrite(install, ns.path_style, ns.ini_mode)
@@ -272,7 +288,7 @@ def run(ns: argparse.Namespace) -> int:
     if ns.no_launch:
         return EXIT_OK
 
-    cmd = launch.build_launch(result.install, ns.wine or "wine", ns.verbose, virtual_desktop)
+    cmd = launch.build_launch(result.install, ns.wine or "wine", ns.verbose, virtual_desktop, scale)
     return launch.launch(cmd)
 
 
