@@ -1,21 +1,49 @@
 # Reproducible Wine/Proton recipes
 
-> **Status: one path is verified, the rest are not.** The maintainer ran §3
+> **Status: two paths are verified, the rest are not.** The maintainer ran §3
 > (Heroic + Proton-GE) on the real GOG install on 2026-11-21 and the game
-> reached its main menu and played; that run is recorded in
-> [`docs/verification.md`](verification.md). Everything else below is still a
-> copy-paste start point a second machine should be able to follow — the
-> "expected output" blocks describe what a correct run *would* show, not what
-> has been observed. Plain `wine` has now been observed **not** to start this
-> title: read the section below before trying it.
+> reached its main menu and played; on 2026-11-22 plain `wine` 11.21 reached the
+> main menu inside a Wine virtual desktop, which the launcher now starts by
+> default. Both runs are recorded in [`docs/verification.md`](verification.md);
+> the checklist item stays unticked until the maintainer ticks it. Everything
+> else below is a copy-paste start point a second machine should be able to
+> follow — its "expected output" blocks describe what a correct run *would*
+> show, not what has been observed.
 
 ---
 
-## Start here: plain Wine crashes at start-up — use a Proton runner
+## Start here: plain Wine crashed without a virtual desktop — the launcher starts one
 
-**If `Disciple.exe` dies with an access violation at `0059559E`, the launch
-environment is the problem, not your INI.** Measured by the maintainer on
-2026-11-21, real GOG install, `wine-staging` 11.21, default `~/.wine` prefix:
+**If `Disciple.exe` dies with an access violation at `0059559E`, it is not your
+INI.** The game asks for 640×480 at 8 bits per pixel. On the maintainer's machine
+plain Wine refused that mode change (`-2`) and the game then faulted; the same
+command inside a Wine virtual desktop reached its intro and menu `[V]`, on that
+machine and in the headless rig. *Why* the change is refused is `[H]`: a missing
+640x480 resolution in the display's mode list is the hypothesis, and the mode
+list was not read.
+
+**The launcher now does that for you.** On plain `wine` it runs the game inside
+a virtual desktop:
+
+```
+wine explorer /desktop=Disciples,640x480 Exe/Disciple.exe
+```
+
+`--virtual-desktop WxH` changes the size, `--no-virtual-desktop` runs the old
+direct `wine Exe/Disciple.exe` (see [`cli.md`](cli.md) and `--dry-run`, which
+prints the exact command). A Proton runner also worked for the maintainer.
+
+### Measured on the maintainer's desktop
+
+2026-11-22, system Wine 11.21, `InWindow=0`, a 2560×1440 screen:
+
+| Observation | Result |
+|---|---|
+| `wine explorer /desktop=Disciples,640x480 Disciple.exe` | **the main menu appears and responds**; the mouse cursor lines up with the drawn menu (the pointer sits on QUIT in the screenshot), so input is 1:1 [V] |
+| what the desktop looks like | the game's 640×480 surface sits in the **top-left corner**, the rest of the desktop is black, there is no title bar and no border [V] — the cause is **unknown**, see the limitation below |
+
+Earlier runs on the same desktop (2026-11-21, real GOG install, `wine-staging`
+11.21, default `~/.wine` prefix) had **no** virtual desktop:
 
 | Attempt | Result |
 |---|---|
@@ -25,19 +53,101 @@ environment is the problem, not your INI.** Measured by the maintainer on
 | Heroic + Proton-GE, its own prefix, the original `X:\…` INI | **plays** ✅ |
 | Heroic + Proton-GE, its own prefix, **the pack's rewritten INI (21 keys → `Z:\…`)** | **plays** ✅ (re-run 2026-11-21 with the rewrite in place; the install holds a single, unmodified `Exe/Disciple.exe`, the same path the crash dumps name) |
 
-The crash is `mov ecx,[eax] ; call [ecx+0x58]` with `EAX=0` — a virtual call
-through a null object. **What precedes it is measured** (see "What the runs on
-plain `wine` showed"): COM does return an interface, `Initialize` and
-`SetCooperativeLevel` succeed, and the game's `SetDisplayMode(640, 480, 8)` is
-refused (`NtUserChangeDisplaySettings` returns `-2`) with the mode left at
-1280x1024x32. **Nothing in this pack fixes that, and nothing here claims it
-does:** it is a limitation of plain `wine` as a launch environment, not a pack
-defect and not an INI problem.
+The fault is `mov ecx,[eax] ; call [ecx+0x58]` with `EAX=0` — a virtual call
+through a null object handed back by the graphics layer. **What precedes it is
+measured** (see "What the runs on plain `wine` showed"): COM does return an
+interface, `Initialize` and `SetCooperativeLevel` succeed, and the game's
+`SetDisplayMode(640, 480, 8)` is refused (`NtUserChangeDisplaySettings` returns
+`-2`) and the mode stays 32 bpp
+(1280x1024x32 on the maintainer's trace). Whether `-2` is
+`DISP_CHANGE_BADMODE` — a missing **resolution** rather than an 8 bpp limit — is
+a hypothesis `[H]`; the rig did not dump the mode list, because it has no
+`xrandr`/`xdpyinfo`. The intervention is verified in two independent places: the
+maintainer's desktop above, and the rig runs below.
+
+### Rig experiments (headless, card `t_2504e165`)
+
+Container `retrolab-dev:fedora44-gui`, `run-headless`, Xvfb, Kron4ek Wine
+builds, a fresh prefix per build, `WINEDEBUG=+seh,+ddraw`, the game copied to a
+scratch dir and normalised with `disciples-play --no-launch`, 40 s per run.
+Every row below is `[V]` — a command run in that card produced it.
+
+| Run | Wine build | X screen / desktop | `InWindow` | `SetDisplayMode(640,480,8)` | `GetDisplayMode` | Result |
+|---|---|---|---|---|---|---|
+| R1 | 11.21 Staging wow64 | Xvfb 1920x1440x24 | 0 | refused: `NtUserChangeDisplaySettings … returned -2` | 1920x1440, 32 bpp RGB | fault `0059559E` [V] |
+| R2 | 10.0 Staging wow64 | Xvfb 1920x1440x24 | 0 | refused, -2 (identical line) | (same path) | fault `0059559E` [V] |
+| R3 | 11.21 wow64 + `+xrandr` | Xvfb 1920x1440x24 | 0 | refused, -2 | (same path) | `Found XRandR 1.6`, "doesn't report any providers, faking one", then the same -2 [V] |
+| R4 | 11.21 wow64 | **Xvfb 640x480x24** | 0 | **accepted**, no error | **PALETTEINDEXED8, 8 bits** | two `CreateSurface`, 0 faults, the "Strategy First Presents" intro on screen at 40 s [V] |
+| R5 | 11.21 wow64 | Xvfb 1920x1440, `wine explorer /desktop=Disciples,640x480 Disciple.exe` | 0 | accepted | PALETTEINDEXED8 | two `CreateSurface`, 0 faults, still running at 40 s [V] |
+| R6 | 11.21 wow64 | Xvfb 1920x1440, `explorer /desktop=Disciples,1920x1080` | 0 | accepted | PALETTEINDEXED8 | two `CreateSurface`, 0 faults, intro on screen in the 640x480 desktop [V] |
+| R7 | 11.21 wow64 | Xvfb 1920x1440, **no command change**; registry `HKCU\Software\Wine\Explorer` `Desktop=Default` + `…\Explorer\Desktops` `Default=640x480` | 0 | accepted | PALETTEINDEXED8 | two `CreateSurface`, 0 faults, still running at 40 s [V] |
+
+What the rig runs establish: the Wine **version** is not the variable — 10.0
+wow64 and 11.21 wow64 refuse the mode in exactly the same way on a 1920x1440
+Xvfb (R1, R2), so a bisect had nothing to look for and was not run — while an
+available 640x480 resolution is: the X screen itself (R4) or a Wine virtual
+desktop (R5, R6, R7) makes the 8-bit mode accepted and the game start. The rig
+could not run a non-wow64 10.0 build (no 32-bit host libraries); Proton was not
+tested there. `[H]` why Proton works: its display-mode emulation probably
+always offers the standard resolutions; that was not measured.
+
+**Open limitation (measured, cause unknown):** inside the virtual desktop the
+game's picture occupies the top-left corner and the rest of the desktop is
+black. Why is not known: the session is KDE Plasma on **Wayland** (reported by
+the maintainer the same day), and `[H]` Xwayland/KDE handle the fullscreen mode
+request differently from an ordinary window — not measured. The pack does not
+scale anything (the `gamescope` recipe below was measured once); the game's own
+windowed mode (`InWindow=1`) remains unsupported. Only the 640x480 default
+was tried on a real desktop; the other sizes above were exercised in the rig
+only.
+
+### Bigger window: a gamescope recipe, not something the launcher does
+
+The launcher only chooses the virtual-desktop size; it does not scale anything.
+To get a larger, centred window, wrap the whole command in `gamescope`, from the
+install's `Exe/` directory:
+
+```bash
+gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- \
+    wine explorer /desktop=Disciples,640x480 Disciple.exe
+```
+
+Measured on the maintainer's machine (2026-11-22: KDE Plasma on **Wayland**,
+Nobara 44, 2560×1440 monitor, AMD RX 580, system Wine 11.21, gamescope
+3.16.23.2+ (gcc 16.1.1), `InWindow=0`):
+
+| Observation | Result |
+|---|---|
+| the window | a **1920×1440** window, centred on the screen, and the game picture **fills** it — 1920×1440 is exactly 3× the game's 640×480 [V] |
+| input | clicking menu items hits the item under the cursor: mouse targeting at 3× works [V] |
+| the menu | appears and responds [V] |
+| the pixels, default filter | the maintainer could not tell by eye whether the scaling looked right [V, subjective] |
+| the pixels, `-F nearest` added | pixel edges are **more visible**; the maintainer did **not** judge it better looking [V, subjective] |
+
+The recipe above keeps gamescope's default filter; `-F nearest` is an option
+for harder pixel edges, a matter of taste. **Not assessed:** audio, a full play
+session, Alt+Tab or Alt+Enter inside gamescope. **Not tried:** `-f`
+(fullscreen), a 2× scale, an X11 session. The launcher gains **no** gamescope
+flag: this is a recipe you type.
+
+Two neighbouring observations from the same session: `wine explorer
+/desktop=Disciples,1280x960` opens its own **1280×960 window** with the
+**unscaled** 640×480 game surface in one corner of it — the game does not scale
+itself — while the plain 640×480 virtual desktop appeared full screen with the
+picture in the top-left corner, as above. `[H]` that Xwayland/KDE treat the
+fullscreen mode request differently from an ordinary window, which would explain
+both; it was not measured.
+
+To reproduce the crash instead, pass `--no-virtual-desktop` on a display that
+refuses the mode change as the maintainer's did. **Nothing in this pack rewrites `DDraw`, `InWindow` or
+the Wine binary:** the virtual desktop is an argv change, visible in
+`--print-command`.
 
 The pack's launcher execs a **single `wine` binary** (override with `--wine`)
 and has no Proton / `STEAM_COMPAT_*` path, so it cannot start the game inside a
-Heroic or Lutris Proton prefix. The supported sequence is therefore: let the
-pack rewrite the INI, then start the game from your runner.
+Heroic or Lutris Proton prefix. Its plain-Wine route is the virtual desktop
+above; its Proton route is the documented pair of steps: let the pack rewrite the
+INI, then start the game from your runner.
 
 ```bash
 disciples-play --no-launch --game-dir "<install>"   # rewrites the 21 keys only
@@ -64,10 +174,11 @@ it. Do not credit it with the working run.
 Three ways to get a prefix. Each one ends with the `disciples-play` launcher
 doing the INI rewrite. Each also mentions the `ddraw` override, because that was
 the design — but for the renderer the override is **inert** (next paragraph), so
-treat it as a step to skip, not a step that makes anything work. Only the Proton
-path (§3) has actually started this title so far.
+treat it as a step to skip, not a step that makes anything work. Two paths have
+actually started this title: a Proton runner (§3) and plain Wine in the
+launcher's virtual desktop (the section above).
 
-The one thing every recipe shares is the **override**. `Disciple.exe` does not
+The one thing every recipe used to share is the **override**. `Disciple.exe` does not
 import DirectDraw, and its renderer does not `LoadLibrary` `ddraw.dll` by name
 (`SMACKW32.DLL`, the video player, does — an unexercised path, see
 [`wrapper.md`](wrapper.md)) — the renderer acquires DirectDraw through **`CoCreateInstance(CLSID_DirectDraw)`**, which
@@ -85,18 +196,19 @@ disciples-play doctor --game-dir "/path/to/Disciples Gold"
 
 ---
 
-## Known crash at start-up: `0059559E` (unresolved on plain `wine`)
+## Known crash at start-up: `0059559E` on plain Wine without a virtual desktop
 
-As of **2026-11-21** this title does not reach the main menu from this pack's
-launcher on plain Wine (wine-11.21 Staging, wow64), in **either** display mode.
-It is not a configuration fault that a recipe below can undo: the way round it is
-a different launch environment — the supported sequence at the top of this file,
-not a Wine setting. The cause is now understood (the game acquires DirectDraw
-through `CoCreateInstance(CLSID_DirectDraw)`; see "What the crash is" below), and
-the one candidate Wine-side fix — register cnc-ddraw as that COM server — is
-untested.
+Plain `wine` died with a `0059559E` access violation on the maintainer's
+desktop on 2026-11-21, in every run; on 2026-11-22 the same desktop started the
+game inside `wine explorer /desktop=Disciples,640x480` (both measured — see
+"Start here"). The `InWindow` value, the `ddraw` override and `DDraw=0` were
+ruled out as the cause; that the *display mode* is the cause is a hypothesis
+`[H]` (the mode list was not read). The game acquires
+DirectDraw through `CoCreateInstance(CLSID_DirectDraw)` (see "What the crash
+is" below), and the one candidate Wine-side fix — register cnc-ddraw as that
+COM server — is untested.
 
-What the runs on plain `wine` showed:
+What the runs on plain `wine` showed (no virtual desktop):
 
 ```
 Disciple.log   "Midgard (v.2000, 6, 22, 1) started on Sat Nov 21 19:13:04 2026"
@@ -126,19 +238,29 @@ wrapper        a cnc-ddraw ddraw.dll staged in Exe\ is not the renderer's — th
 Measured headlessly in the retrolab rig (wine-staging **11.21**, wow64-only,
 llvmpipe software GL, no audio, baked prefix) on **2026-11-22**, one variable per
 run. Legend: `[V]` = measured in that run, `[H]` = hypothesis, `[U]` = untested
-in this rig (needs the maintainer's machine or a different Wine build).
+in this rig (needs the maintainer's machine or a different Wine build). The rows
+below are the candidates tested and **ruled out** as the variable, plus what
+remains open.
 
 | Experiment | Result |
 |---|---|
+| `[Disciple] InWindow=1` (the game's own window mode) | **crashes at `0059559E`** without a virtual desktop |
+| `[Disciple] InWindow=0` (fullscreen, the retail baseline) | **crashes at `0059559E`** — same fault without a virtual desktop |
 | **B** — `WINEDLLOVERRIDES=ddraw=b` (builtin ddraw, baseline) | **[V] crashes at `0059559E`, deterministically.** `Disciple.log` = "Midgard started" (dies before sound init); frame = the crash dialog (mean 241, 74 colours); windows = game + "Wine Debugger" + "Program Error". |
 | **E5** — `WINEDLLOVERRIDES=ddraw=n` (native cnc-ddraw, **no** `,b` fallback) | **[V] same `0059559E` crash**, and Wine reports the native DLL is *never loaded*: `err:ole:apartment_add_dll couldn't load in-process dll C:\windows\system32\ddraw.dll`, then `class {D7B70EE0-4340-11CF-B063-0020AFC2CD35} not registered`. The staged `Exe\ddraw.dll` is not in that path, so `n` always falls back to builtin — exactly why the pack's `n,b` never helped. |
 | **E7** — `[Disciple] DDraw=0` (GDI fallback) | **[V] does not crash** — process alive at the 25 s kill. Frame near-black (mean 1→10, 33→52 colours); `Disciple.log` = "Midgard started" + "Sound system could not be initialized" (no audio device in the rig). Confirms "GDI starts, black screen". |
 | **E3** — `WINEDLLOVERRIDES=msvcrt=n` (force the bundled 1999 `MSVCRT.DLL`) | **[V] not a fix and not the same crash.** Wine's own DLL chain breaks — `err:module:import_dll Library msvcrt.dll (needed by advapi32/rpcrt4/user32/gdi32/shell32) not found`, `STATUS_DLL_NOT_FOUND c0000135`. The game process starts ("Midgard started") but the loader never reaches DirectDraw, so the CRT is not the cause. |
 | **E4** — `WINEARCH=win32` prefix (non-wow64) | **[U] cannot be run in this rig** — this Wine build is wow64-only: `wine: WINEARCH is set to 'win32' but this is not supported in wow64 mode.` Needs a 32-bit-capable Wine build on the maintainer's machine. |
 | **E1** — Windows version gate (`winecfg` → 98/XP) | **[U]** — the prefix reports Windows 10 Pro (build 19045); not changed here. Proton reports Win7/WinXP to old titles, so this is still a plausible differential and a ~10-second maintainer test. |
-| **E2** — virtual desktop 800×600 | **[U]** — `winecfg` display change not applied in the rig. |
+| **E2** — virtual desktop 800×600 | **[V] superseded — this is the intervention.** The `winecfg` display change was never applied in that run, but the virtual desktop was measured later in the same rig (`wine explorer /desktop=…` in R5, a 1920×1080 desktop in R6, the registry key in R7), and an 8 bpp 640x480 mode was accepted there. See the rig table under "Start here". |
 | **E6** — X11 vs Wayland display path | **[U]** — the rig is X11-only (Xvfb); needs the maintainer's display. |
-| Wine version ≠ 11.21 | **[U]** — only 11.21 is available in the rig (pinned by SHA-256); no other build can be added without changing the image. |
+| Wine version ≠ 11.21 | **[V] tested later** — 10.0 Staging wow64 ran in the rig matrix above (R2) and refused the 8-bit mode exactly as 11.21 did (R1), so the version is not the variable; no further builds were added to the image. |
+
+So the crash is not about which of the game's own two display modes is set
+(`InWindow`), nor the wrapper, nor the CRT: it is about the display mode the game
+can actually switch to (the rig rows above). Still open: a non-`wow64` Wine build,
+a different Windows version in the prefix (`winecfg` → Windows version), and the
+mechanism behind the refused `SetDisplayMode` `[H]`.
 
 **What the crash is (resolved, `[V]`).** The investigation's open question — how
 `Disciple.exe` obtains `IDirectDraw` — is now answered: the game calls
@@ -186,9 +308,10 @@ silent change would hide the setting from whoever debugs it next.
 
 ## 1. Plain Wine
 
-> **Observed not to start this title** (maintainer, 2026-11-21): plain `wine`
-> crashes at `0059559E` with or without the wrapper staged — see
-> [Start here](#start-here-plain-wine-crashes-at-start-up--use-a-proton-runner).
+> **Starts this title when the launcher's virtual desktop is in place**
+> (maintainer, 2026-11-22); without a virtual desktop
+> plain `wine` crashed on the maintainer's machine at `0059559E` with or without the wrapper staged — see
+> [Start here](#start-here-plain-wine-crashed-without-a-virtual-desktop--the-launcher-starts-one).
 > The recipe is kept because a different Wine build or prefix may behave
 > differently, and because `DDraw=0` at least starts the game (black screen).
 
@@ -245,19 +368,22 @@ disciples-play --game-dir "/path/to/Disciples Gold" --dry-run
 
 disciples-play --game-dir "/path/to/Disciples Gold"
 # expected: "rewrote 21 installation keys (backup at …/Exe/DISCIPLE.INI.orig)"
-#           then Wine starts the game. Under plain Wine that launch currently
-#           ends at 0059559E with the wrapper staged (see "Start here"), so for
-#           play use `--no-launch` here and start the game from a Proton runner.
+#           then Wine starts the game inside a 640x480 virtual desktop, which is
+#           what reached the main menu on the maintainer's desktop (2026-11-22).
+#           --no-virtual-desktop skips the extra window; whether the game starts
+#           without it depends on the display (untested beyond the
+#           maintainer's machine and the rig).
 ```
 
 ---
 
 ## 2. Bottles
 
-> **Expected to hit the same start-up crash as §1.** Bottles wraps a `wine`
-> runner, so unless you point it at Proton it is plain Wine with a GUI — and
-> plain Wine crashes at `0059559E` for this title (see "Start here"). Untested
-> with a Proton runner in Bottles.
+> **Expected to reach the same result as §1.** Bottles wraps a `wine` runner, so
+> unless you point it at Proton it is plain Wine with a GUI — and the launcher's
+> virtual desktop is what got plain Wine to the menu on the maintainer's machine (see "Start here").
+> Not re-run in Bottles since that change, so treat it as expected `[H]`, not
+> measured. Untested with a Proton runner in Bottles.
 
 Bottles wraps the same Wine prefix in a GUI. The parts that matter are the
 **bottle template**, the **DLL override field**, and the **locale/DPI**.
@@ -279,8 +405,8 @@ Bottles wraps the same Wine prefix in a GUI. The parts that matter are the
 
    ```bash
    disciples-play --game-dir "/path/to/Disciples Gold"
-   # expected: the INI rewrite summary; then the game starts — expect the §1
-   #           start-up crash unless that bottle's runner is Proton.
+   # expected: the INI rewrite summary; then the game starts in the launcher's
+   #           640x480 virtual desktop.
    ```
 
    From a *host* shell the launcher would pick the host's plain `wine`, not the
@@ -305,7 +431,9 @@ Bottles wraps the same Wine prefix in a GUI. The parts that matter are the
 > **original `X:\…` INI** and with **the pack's rewritten `Z:\…` values**
 > (`disciples-play --no-launch`, then Play in Heroic; the rewritten file was left
 > untouched by the run). No wrapper was staged in either run, so nothing here
-> credits cnc-ddraw with it.
+> credits cnc-ddraw with it. It is one of **two** verified routes: the other is
+> plain Wine in the launcher's 640x480 virtual desktop (2026-11-22, "Start
+> here"), which needs no Proton prefix at all.
 >
 > One correction worth keeping visible: an earlier run was recorded as using the
 > rewritten INI when the file in place still held the original `X:\…` values
@@ -339,9 +467,10 @@ already has.
    candidates are the Proton Wine version and its patches, the prefix's Windows
    version, and the display path — not a different ddraw implementation.
 4. DPI: leave at 96 (same reasoning as §1c). The pack's launcher always execs a
-   single `wine` binary — it has no Proton/`STEAM_COMPAT_*` path — so it cannot
-   launch under the Heroic Proton prefix you just configured. Use the pack for
-   the INI rewrite, then launch from Heroic itself:
+   single `wine` binary — it has no Proton/`STEAM_COMPAT_*` path, so it cannot
+   launch under the Heroic Proton prefix you just configured (its own route is
+   the plain-Wine virtual desktop). Use the pack for the INI rewrite, then launch
+   from Heroic itself:
 
    ```bash
    disciples-play --game-dir "/path/to/Disciples Gold" --no-launch
@@ -362,13 +491,21 @@ already has.
 A black screen or a window that never appears is a *presentation* problem and is
 not the start-up crash above. For any recipe, in this order:
 
+0. **Black *around* the game in a virtual desktop.** If you launched without
+   `--no-virtual-desktop`, the game's 640×480 surface sits in the top-left corner
+   of a black desktop — measured on the maintainer's desktop (2026-11-22), cause
+   unknown. The game itself is fine (the menu responds); this is cosmetic and is
+   listed as an open limitation in [`verification.md`](verification.md). Nothing
+   in this pack positions or scales that surface yet.
 1. **Is a wrapper claimed here?** cnc-ddraw expects the *game* to be fullscreen
    (`InWindow=0`) and presents the window itself — but **this title's renderer never loads
    it** (see "Known crash at start-up"), so no `InWindow` value and no staged DLL
    can produce a wrapper-presented game window today. If a black screen is your symptom, the black
    screen and the start-up crash are both consequences of that, not of this
    setting; `doctor`'s `ini-window` line reports the key but cannot promise a
-   wrapper-presented window.
+   wrapper-presented window. If the game dies at start-up with `C0000005` at
+   `0059559E` instead, you have the start-up crash above: use the launcher's
+   default virtual desktop.
 2. **Override in effect (for titles that load cnc-ddraw).** `disciples-play
    doctor --game-dir …` → the `ddraw-override` line. For this title that line is
    always `INFO` — it cannot fail, and it cannot be cleared by any action, so it

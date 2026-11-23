@@ -41,6 +41,13 @@ _DDRAW_DLL = "ddraw.dll"
 #: The WINEDLLOVERRIDES value M3 documents, applied only when the wrapper is staged.
 _DDRAW_OVERRIDE = "ddraw=n,b"
 
+#: Name of the Wine virtual desktop the game runs in. A constant, not user input.
+VIRTUAL_DESKTOP_NAME = "Disciples"
+#: The default virtual-desktop size: the game's fullscreen mode.
+DEFAULT_VIRTUAL_DESKTOP = (640, 480)
+#: Upper bound for either edge, so a typo cannot ask Wine for a 10-metre desktop.
+MAX_VIRTUAL_DESKTOP_EDGE = 16384
+
 
 class CliError(Exception):
     """A user-facing failure carrying its documented process exit code."""
@@ -49,6 +56,25 @@ class CliError(Exception):
         super().__init__(message)
         self.exit_code = exit_code
         self.message = message
+
+
+def parse_virtual_desktop(value: str) -> tuple[int, int]:
+    """Parse ``WIDTHxHEIGHT`` (ASCII digits, one ``x``/``X``) or raise ``CliError`` (exit 2)."""
+    error = CliError(
+        2,
+        f"--virtual-desktop expects WIDTHxHEIGHT, two whole numbers in "
+        f"1..{MAX_VIRTUAL_DESKTOP_EDGE} (e.g. 640x480); got {value!r}",
+    )
+    parts = value.replace("X", "x").split("x")
+    if len(parts) != 2:
+        raise error
+    for part in parts:
+        if not part or not (part.isascii() and part.isdigit()):
+            raise error
+    width, height = int(parts[0]), int(parts[1])
+    if not (1 <= width <= MAX_VIRTUAL_DESKTOP_EDGE and 1 <= height <= MAX_VIRTUAL_DESKTOP_EDGE):
+        raise error
+    return width, height
 
 
 @dataclass(frozen=True)
@@ -297,16 +323,24 @@ class LaunchCommand:
     exe_path: Path
     cwd: Path
     env: dict[str, str]
+    #: ``(width, height)`` of the Wine virtual desktop, or ``None`` to exec wine directly.
+    virtual_desktop: tuple[int, int] | None = DEFAULT_VIRTUAL_DESKTOP
+
+    def _tail(self) -> list[str]:
+        if self.virtual_desktop is None:
+            return [str(self.exe_path)]
+        w, h = self.virtual_desktop
+        return ["explorer", f"/desktop={VIRTUAL_DESKTOP_NAME},{w}x{h}", str(self.exe_path)]
 
     @property
     def argv(self) -> list[str]:
         assert self.wine_path is not None, "argv is only defined once wine resolves"
-        return [self.wine_path, str(self.exe_path)]
+        return [self.wine_path, *self._tail()]
 
     @property
     def display(self) -> str:
         """The shell-quoted command line a human can copy and paste."""
-        return shlex.join([self.wine_name, str(self.exe_path)])
+        return shlex.join([self.wine_name, *self._tail()])
 
 
 def wrapper_staged(exe_dir: Path) -> bool:
@@ -367,9 +401,15 @@ def build_env(install: Install, verbose: bool) -> dict[str, str]:
     return env
 
 
-def build_launch(install: Install, wine_name: str, verbose: bool) -> LaunchCommand:
+def build_launch(
+    install: Install,
+    wine_name: str,
+    verbose: bool,
+    virtual_desktop: tuple[int, int] | None = DEFAULT_VIRTUAL_DESKTOP,
+) -> LaunchCommand:
     """Assemble the launch command (without running it)."""
     return LaunchCommand(
+        virtual_desktop=virtual_desktop,
         wine_name=wine_name,
         wine_path=resolve_wine(wine_name),
         exe_path=install.exe_path,

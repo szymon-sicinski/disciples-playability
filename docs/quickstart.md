@@ -1,9 +1,10 @@
 # Quick start — three commands
 
-A clean machine with Python ≥ 3.10 and a Wine-compatible runner is enough. For
-this title that runner has to be **Proton** (Heroic, Lutris) — plain `wine`
-crashes at start-up, see [`wine-recipe.md`](wine-recipe.md) "Start here". The
-pack has **no runtime dependencies** and needs no network access at run time.
+A clean machine with Python ≥ 3.10 and a Wine-compatible runner is enough. Plain
+`wine` reached the menu on the maintainer's machine (2026-11-22) when the
+launcher started the game in a 640×480 Wine virtual desktop, which is now the
+default. A **Proton** runner (Heroic, Lutris) also worked there — see [`wine-recipe.md`](wine-recipe.md) "Start here". The pack
+has **no runtime dependencies** and needs no network access at run time.
 
 ```bash
 # 1. install (from a clone of this repository)
@@ -13,10 +14,10 @@ pipx install .            # if pipx is missing (Debian/Ubuntu: sudo apt install 
                           # any other installer works too, e.g. python3 -m pip install --user .
 # 2. check the install, the Wine side and the data files — one line per check
 disciples-play doctor --game-dir "$HOME/Games/Disciples Gold"
-# 3. rewrite the INI paths, then start the game from your PROTON runner
-disciples-play --no-launch --game-dir "$HOME/Games/Disciples Gold"
-# then press Play in Heroic / Lutris. (Plain `wine` dies at 0059559E on start-up
-# with or without the wrapper staged; see wine-recipe.md "Start here".)
+# 3. rewrite the INI paths and start the game in a 640x480 Wine virtual desktop
+disciples-play --game-dir "$HOME/Games/Disciples Gold"
+# (a Proton runner instead: `--no-launch`, then press Play in Heroic / Lutris;
+#  --no-virtual-desktop skips the virtual desktop)
 ```
 
 **Your files stay yours.** The pack only reads your installation, rewrites
@@ -38,14 +39,36 @@ a bad command line. It is read-only.
 
 **`disciples-play --game-dir …`** resolves the install (a parent folder is
 fine), rewrites the 21 stale `[Installation]`/`[InstallationClient]` values to
-this install's real paths, and runs `wine Exe/Disciple.exe` with the working
-directory set to `Exe`. Use `--dry-run` to see the diff and the exact command
-without writing or launching, and `--print-command` to get the shell-quoted
-command alone.
+this install's real paths, and runs `wine explorer
+/desktop=Disciples,640x480 Exe/Disciple.exe` with the working directory set to
+`Exe`. On the maintainer's machine plain Wine crashed at start-up without a
+virtual desktop and reached the menu inside this one. `--virtual-desktop WxH` picks another size (`800x600`), and
+`--no-virtual-desktop` execs `wine Exe/Disciple.exe` directly. Use `--dry-run`
+to see the diff and the exact command without writing or launching, and
+`--print-command` to get the shell-quoted command alone.
 
 Exit codes: `0` success, `2` bad/missing install, `3` the INI could not be
 written, `4` Wine not found. The full contract is in
 [`cli.md`](cli.md).
+
+**Bigger window, centred — a recipe, not a launcher flag.** Wrap the whole
+command in `gamescope`, from the install's `Exe/`:
+
+```bash
+gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- \
+    wine explorer /desktop=Disciples,640x480 Disciple.exe
+```
+
+Measured 2026-11-22 (KDE Plasma on Wayland, 2560×1440 monitor, system Wine
+11.21, `InWindow=0`): a **1920×1440** window, centred, with the game picture
+filling it — exactly 3× — and clicking menu items hits the item under the
+cursor (gamescope 3.16.23.2+). Adding `-F nearest` made the pixel edges more
+visible; the maintainer did not find it better looking, so the recipe keeps the
+default filter. Audio, a full session and Alt+Tab inside gamescope were **not**
+assessed. Details and the not-tried list:
+[`wine-recipe.md`](wine-recipe.md#bigger-window-a-gamescope-recipe-not-something-the-launcher-does).
+There is no `--gamescope` flag; the launcher only chooses the virtual-desktop
+size.
 
 ## Getting the window (cnc-ddraw)
 
@@ -64,14 +87,18 @@ and it is not a different ddraw implementation (DXVK provides Direct3D, not
 known and what is open.
 [`wrapper.md`](wrapper.md) documents the preset and the digest pin.
 
-> **Known: the game dies at start-up under plain Wine.** `Exception C0000005` at
-> `0059559E`, the same with `InWindow=0` and `InWindow=1`; see
-> [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-unresolved-on-plain-wine)
-> for the evidence and the candidates. This is unresolved in v0.1.0.
+> **Known: plain Wine crashed without a virtual desktop.** On the maintainer's
+> machine the game died at start-up with `Exception C0000005` at `0059559E`, the
+> same with `InWindow=0` and `InWindow=1`; the launcher now starts it in a
+> 640×480 virtual desktop, which reached the maintainer's main menu on 2026-11-22. Inside that
+> desktop the picture sits in the top-left corner on a black background — open,
+> cosmetic, cause unknown. See
+> [`wine-recipe.md`](wine-recipe.md#known-crash-at-start-up-0059559e-on-plain-wine-without-a-virtual-desktop)
+> for the evidence.
 
 ## If something does not work
 
-- The game **crashes at start-up** (`0059559E`, access violation) under plain `wine` → it is the launch environment, not your INI: rewrite with `disciples-play --no-launch --game-dir …` and press Play in Heroic/Lutris with a Proton runner ([`wine-recipe.md`](wine-recipe.md) "Start here").
+- The game **crashes at start-up** (`0059559E`, access violation) → this is the crash seen on the maintainer's machine without a virtual desktop (cause `[H]`): run the launcher without `--no-virtual-desktop` (the default starts a 640×480 Wine virtual desktop), or with a Proton runner via `--no-launch` + Play in Heroic/Lutris ([`wine-recipe.md`](wine-recipe.md) "Start here").
 - The window is black or the game does not start → [`wine-recipe.md`](wine-recipe.md) "If the screen is black".
 - A `FAIL` from `doctor` names its own fix on the same line.
 - `disciples-play data --game-dir …` prints a read-only structural report of the
@@ -80,11 +107,14 @@ known and what is open.
 ## What is not verified yet
 
 Everything that needs a human on a machine with a display and Wine is
-**UNVERIFIED** in [`verification.md`](verification.md) — with one partial result
+**UNVERIFIED** in [`verification.md`](verification.md) — with two partial results
 recorded there: the game *does* reach its main menu, launched by pressing Play in
-Heroic with a Proton-GE runner. Lutris follows the same recipe but has not been
-run. What remains unproven is the pack's own command — `disciples-play
---game-dir …` crashes under plain `wine` — and, among the rest, the 3× window,
-palette animation, mouse targeting, music without the CD, portability after
+Heroic with a Proton-GE runner, and on 2026-11-22 by plain `wine` 11.21 in a
+640×480 Wine virtual desktop. Lutris follows the same recipe but has not been
+run, and the virtual-desktop route has not been re-run with the wrapper staged.
+The 3× window and mouse targeting at 3× each have **one observation** now
+(gamescope, 2026-11-22: a 1920×1440 window, clicks landing on the item under the
+cursor) but no ticked box — nobody has checked pixel sharpness. Still unproven
+among the rest: palette animation, music without the CD, portability after
 moving the folder, and a second prefix. Read that file before believing any
 claim in this repository about the game *playing*.

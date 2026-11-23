@@ -26,7 +26,7 @@ functions:
 
 > **Status for the renderer:** it never loads the staged `ddraw.dll`, so the
 > wrapper is not credited with any working run and does not fix the plain-Wine
-> start-up crash (`0059559E`) — that is an environment problem; see
+> start-up crash (`0059559E`) — the cause of that crash was not isolated here; see
 > [`wine-recipe.md`](wine-recipe.md) "Start here". The preset and fetch below
 > remain correct for the wrapper they configure; they just cannot take over
 > the renderer's graphics layer, because the COM path bypasses them (the video
@@ -163,7 +163,7 @@ that refusal is the safety feature working, not a bug.
 > the game acquires DirectDraw via `CoCreateInstance(CLSID_DirectDraw)` →
 > `system32\ddraw.dll`, so the renderer never loads a staged `ddraw.dll` and none of the
 > `ddraw.ini`/`hook`/`renderer` knobs below take effect for it. The
-> start-up crash (`0059559E`) is the environment, not the wrapper — see
+> start-up crash (`0059559E`) was seen without the wrapper too (the cause was not isolated) — see
 > [`wine-recipe.md`](wine-recipe.md) "Start here". The triage steps below stay
 > correct for titles that load cnc-ddraw.
 

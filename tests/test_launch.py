@@ -7,6 +7,7 @@ trees are synthetic ``tmp_path`` fixtures -- no game bytes.
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 
 import pytest
@@ -215,6 +216,82 @@ def test_resolve_wine_explicit_path(exec_tmp_root: Path, tmp_path: Path) -> None
     shim.chmod(0o755)
     assert launch.resolve_wine(str(shim)) == str(shim)
     assert launch.resolve_wine(str(tmp_path / "missing")) is None
+
+
+def _launch_for(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **kwargs):
+    monkeypatch.setattr(launch.shutil, "which", lambda name: "/fake/wine")
+    install = launch.resolve_install(make_install(tmp_path / "install"))
+    return install, launch.build_launch(install, "wine", False, **kwargs)
+
+
+def test_build_launch_default_argv_uses_virtual_desktop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install, cmd = _launch_for(tmp_path, monkeypatch)
+    assert cmd.argv == [
+        "/fake/wine",
+        "explorer",
+        "/desktop=Disciples,640x480",
+        str(install.exe_path),
+    ]
+    assert cmd.argv[-1] == str(install.exe_path)
+
+
+def test_build_launch_custom_virtual_desktop_size(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, cmd = _launch_for(tmp_path, monkeypatch, virtual_desktop=(1024, 768))
+    assert cmd.argv[1:3] == ["explorer", "/desktop=Disciples,1024x768"]
+
+
+def test_build_launch_without_virtual_desktop_is_plain_wine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install, cmd = _launch_for(tmp_path, monkeypatch, virtual_desktop=None)
+    assert cmd.argv == ["/fake/wine", str(install.exe_path)]
+    assert "explorer" not in cmd.argv
+    assert cmd.display == shlex.join(["wine", str(install.exe_path)])
+
+
+def test_build_launch_display_shows_virtual_desktop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    install, cmd = _launch_for(tmp_path, monkeypatch)
+    assert cmd.display == shlex.join(
+        ["wine", "explorer", "/desktop=Disciples,640x480", str(install.exe_path)]
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("640x480", (640, 480)),
+        ("640X480", (640, 480)),
+        ("1x1", (1, 1)),
+        ("16384x16384", (16384, 16384)),
+        ("0640x0480", (640, 480)),
+    ],
+)
+def test_parse_virtual_desktop_accepts(value: str, expected: tuple[int, int]) -> None:
+    assert launch.parse_virtual_desktop(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["0x0", "640", "axb", "-640x480", "640x", "x480", "640x480x600", "99999x99999", "640x 480"],
+)
+def test_parse_virtual_desktop_rejects(value: str) -> None:
+    with pytest.raises(launch.CliError) as excinfo:
+        launch.parse_virtual_desktop(value)
+    assert excinfo.value.exit_code == 2
+    assert "\n" not in excinfo.value.message
+    assert repr(value) in excinfo.value.message
+
+
+@pytest.mark.parametrize("value", ["640x480", "640X480", "1x1", "16384x16384"])
+def test_parse_virtual_desktop_round_trips(value: str) -> None:
+    w, h = launch.parse_virtual_desktop(value)
+    assert f"{w}x{h}" == value.lower()
 
 
 def test_compute_rewrite_reports_changed_count(
