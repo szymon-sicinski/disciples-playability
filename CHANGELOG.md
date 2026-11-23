@@ -21,8 +21,8 @@ those eleven items are ticked.
   rewrites the 21 absolute `[Installation]`/`[InstallationClient]` values on
   every start, keeps a one-time `<ini name>.orig` (`DISCIPLE.ini.orig` on a lowercase install), and starts the game
   in a 640×480 Wine virtual desktop (`wine explorer /desktop=Disciples,640x480
-  Exe/Disciple.exe`) with the working directory set to `Exe` — plain Wine needs
-  such a display mode to get past the `0059559E` start-up crash.
+  Exe/Disciple.exe`) with the working directory set to `Exe`. On the maintainer's machine plain Wine
+  crashed at `0059559E` without it and reached the menu with it.
   `--virtual-desktop WxH` changes the size (validated strictly; a bad value exits
   `2` with one line) and `--no-virtual-desktop` execs `wine Exe/Disciple.exe`
   directly. `--dry-run` prints the diff, command and cwd without writing;
@@ -154,7 +154,7 @@ those eleven items are ticked.
 - **Proton plays, with either INI.** Heroic + Proton-GE, its own prefix, reaches
   the main menu and plays with the install's **original `X:\…` INI** *and* with
   **the pack's rewritten `Z:\…` values** (`--no-launch`, then Play in Heroic).
-  The Proton runner is what makes it run; the rewrite is what makes it portable.
+  The rewrite is what makes it portable; the Proton runner is one of two routes seen to run it.
 - **The pack's launcher does not drive Proton.** It execs a single `wine`
   binary (`--wine` overrides it) and has no `STEAM_COMPAT_*` path, so the
   Proton route is `disciples-play --no-launch --game-dir …` and then

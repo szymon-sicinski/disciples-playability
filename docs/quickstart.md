@@ -41,8 +41,8 @@ a bad command line. It is read-only.
 fine), rewrites the 21 stale `[Installation]`/`[InstallationClient]` values to
 this install's real paths, and runs `wine explorer
 /desktop=Disciples,640x480 Exe/Disciple.exe` with the working directory set to
-`Exe` — a 640×480 Wine virtual desktop is what plain Wine needs to start this
-title. `--virtual-desktop WxH` picks another size (`800x600`), and
+`Exe`. On the maintainer's machine plain Wine crashed at start-up without a
+virtual desktop and reached the menu inside this one. `--virtual-desktop WxH` picks another size (`800x600`), and
 `--no-virtual-desktop` execs `wine Exe/Disciple.exe` directly. Use `--dry-run`
 to see the diff and the exact command without writing or launching, and
 `--print-command` to get the shell-quoted command alone.

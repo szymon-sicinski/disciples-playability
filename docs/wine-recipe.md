@@ -381,7 +381,7 @@ disciples-play --game-dir "/path/to/Disciples Gold"
 
 > **Expected to reach the same result as §1.** Bottles wraps a `wine` runner, so
 > unless you point it at Proton it is plain Wine with a GUI — and the launcher's
-> virtual desktop is what makes plain Wine start this title (see "Start here").
+> virtual desktop is what got plain Wine to the menu on the maintainer's machine (see "Start here").
 > Not re-run in Bottles since that change, so treat it as expected `[H]`, not
 > measured. Untested with a Proton runner in Bottles.
 

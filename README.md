@@ -23,9 +23,9 @@ operates on an installation **you already own**.
 ## What the pack is
 
 The game runs under plain **`wine`** — the launcher starts it in a 640×480 Wine
-virtual desktop, which is what plain Wine needs to get past the start-up crash
-at `0059559E` — or under a **Proton** runner (Heroic, Lutris); both reached the
-main menu. This is not a compatibility
+virtual desktop (on the maintainer's machine plain Wine crashed at `0059559E`
+without one and reached the menu with it) — or under a **Proton** runner (Heroic,
+Lutris); both reached the main menu there. This is not a compatibility
 rescue, it is a portability and reproducibility problem. Upstream [`cnc-ddraw`](https://github.com/FunkyFr3sh/cnc-ddraw)
 (MIT) already provides windowing, scaling and VSync and lists *Disciples*
 among its supported games. What is missing, and what this pack adds:
@@ -51,8 +51,8 @@ main menu inside a 640×480 Wine virtual desktop (2026-11-22), which the launche
 now starts by default. **Heroic + Proton-GE** is the other verified route: it
 reaches the main menu and plays with the install's **original `X:\…` INI**. The
 pack's own `Z:\…` rewrite also plays under that Proton runner (`--no-launch`,
-then Play in Heroic) — so the rewrite is what makes the install portable and the
-display mode (virtual desktop or Proton) is what makes it run. See
+then Play in Heroic) — so the rewrite is what makes the install portable; the
+virtual desktop and the Proton runner are the two ways it was seen to run. See
 [`docs/wine-recipe.md`](docs/wine-recipe.md). Because the launcher
 execs a single `wine` binary and cannot start into a Proton prefix, the
 supported sequence is `disciples-play --no-launch --game-dir …` and then
