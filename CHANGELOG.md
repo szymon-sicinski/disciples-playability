@@ -28,9 +28,20 @@ those eleven items are ticked.
   directly. `--dry-run` prints the diff, command and cwd without writing;
   `--print-command` prints the command alone; `--path-style`, `--ini-mode`,
   `--wine`, `--no-launch` are documented in [`docs/cli.md`](docs/cli.md).
-- **`doctor` subcommand** — ten `PASS`/`FAIL`/`WARN` checks (install, INI
-  writability, installation paths, wine, `ddraw` override, wrapper, `InWindow`,
-  music, video, display) with a fix hint per line and a stable `--json` schema.
+- **Opt-in bigger window (`--scale N`)** — `--scale 3` wraps the launch in
+  `gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- …` so the fixed 640×480
+  picture can fill a centred 1920×1440 window; `1` is off and the default, a
+  `--virtual-desktop WxH` size is the base, and `--scale` without `gamescope` on
+  `PATH` exits `2` with one line. Measured once on the maintainer's
+  KDE Plasma/Wayland machine (gamescope 3.16.23.2+): the window was centred, the
+  picture filled it and clicks landed on the item under the cursor at 3×. Other
+  scales, `-f`, X11, audio and Alt+Tab were not tested — see
+  [`docs/wine-recipe.md`](docs/wine-recipe.md#a-bigger-window---scale-n).
+- **`doctor` subcommand** — eleven lines: ten `PASS`/`FAIL`/`WARN` checks
+  (install, INI writability, installation paths, wine, `ddraw` override, wrapper,
+  `InWindow`, music, video, display) plus an `INFO` line for `gamescope` ("found
+  at … / not found; only needed for `--scale`"). Each check has a fix hint per
+  line and a stable `--json` schema.
   A fourth status, `INFO`, reports a setting worth knowing that cannot be acted
   on; it never changes the exit code.
   It is read-only, never prints a game hash, and never rewrites the display key.

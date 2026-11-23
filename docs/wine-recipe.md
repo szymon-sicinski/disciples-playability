@@ -101,16 +101,30 @@ windowed mode (`InWindow=1`) remains unsupported. Only the 640x480 default
 was tried on a real desktop; the other sizes above were exercised in the rig
 only.
 
-### Bigger window: a gamescope recipe, not something the launcher does
+### A bigger window: `--scale N`
 
-The launcher only chooses the virtual-desktop size; it does not scale anything.
-To get a larger, centred window, wrap the whole command in `gamescope`, from the
-install's `Exe/` directory:
+The launcher's default route only chooses the virtual-desktop size; it does not
+scale anything by itself. `--scale N` (a whole number 1…4; `1` is off and the
+default) wraps the usual wine command in `gamescope` with integer scaling, using
+the virtual-desktop size as the base:
+
+```bash
+disciples-play --game-dir "/path/to/Disciples Gold" --scale 3
+```
+
+which runs, from the install's `Exe/` directory:
 
 ```bash
 gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- \
     wine explorer /desktop=Disciples,640x480 Disciple.exe
 ```
+
+`--print-command --scale 3` prints the same command line with this install's
+absolute `Exe/Disciple.exe` path. With `--virtual-desktop WxH`
+the base is `WxH` (`-w W -h H -W W*3 -H H*3`), and with `--no-virtual-desktop`
+it is the game's own 640×480 surface. `--scale` needs `gamescope` on `PATH`: on a
+machine without it the command exits `2` with one line and starts nothing
+(`doctor` reports gamescope as an `INFO` line, never a failure).
 
 Measured on the maintainer's machine (2026-11-22: KDE Plasma on **Wayland**,
 Nobara 44, 2560×1440 monitor, AMD RX 580, system Wine 11.21, gamescope
@@ -124,11 +138,19 @@ Nobara 44, 2560×1440 monitor, AMD RX 580, system Wine 11.21, gamescope
 | the pixels, default filter | the maintainer could not tell by eye whether the scaling looked right [V, subjective] |
 | the pixels, `-F nearest` added | pixel edges are **more visible**; the maintainer did **not** judge it better looking [V, subjective] |
 
-The recipe above keeps gamescope's default filter; `-F nearest` is an option
-for harder pixel edges, a matter of taste. **Not assessed:** audio, a full play
-session, Alt+Tab or Alt+Enter inside gamescope. **Not tried:** `-f`
-(fullscreen), a 2× scale, an X11 session. The launcher gains **no** gamescope
-flag: this is a recipe you type.
+**Measured 2026-11-22/23, same machine:** wrapping the *launcher itself* worked
+too — `gamescope -w 640 -h 480 -W 1920 -H 1440 -S integer -- disciples-play
+--game-dir "<install>"` started the game in a gamescope window the maintainer
+describes as working correctly, with a usable menu [V]. That is the same argv
+the flag builds around the wine command, with the launcher's install resolution
+and INI rewrite in front of it.
+
+The flag keeps gamescope's default filter; `-F nearest` is an option for harder
+pixel edges, a matter of taste. **Not assessed:** audio, a full play session,
+Alt+Tab or Alt+Enter inside gamescope. **Not tried:** `-f` (fullscreen),
+`--scale 2` and `--scale 4`, an X11 session. Only the 3× scale has been
+observed, on one Wayland machine. The launcher's default route (no `--scale`)
+is unchanged and has no gamescope dependency.
 
 Two neighbouring observations from the same session: `wine explorer
 /desktop=Disciples,1280x960` opens its own **1280×960 window** with the

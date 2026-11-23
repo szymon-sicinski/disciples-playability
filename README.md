@@ -8,7 +8,8 @@ This repository ships **no game data and never will**: no `Disciple.exe`, no
 `.DBF`/`.dbi` tables, no art, audio, video or save files. It is software that
 operates on an installation **you already own**.
 
-> **Status: v0.1.0 release candidate.** The INI rewriter, the launcher, the
+> **Status: v0.1.0 release candidate.** The INI rewriter, the launcher
+> (including the opt-in `--scale` gamescope wrap), the
 > cnc-ddraw preset and pinned fetch, the `doctor` subcommand, the Wine recipes
 > and the read-only `data` scanner are implemented and tested on synthetic
 > fixtures. The maintainer's in-game runs reached the main menu twice: on
@@ -34,7 +35,7 @@ among its supported games. What is missing, and what this pack adds:
 |---|---|---|
 | 1 | `Exe\DISCIPLE.INI` hardcodes 21 absolute `X:\…` paths; move the folder and the game cannot find its data | Rewrites `[Installation]` / `[InstallationClient]` to the real install on every start, with a one-time `<name>.orig` backup; a second run is a byte-wise no-op |
 | 2 | cnc-ddraw is a zip you unpack and configure by hand per install | A curated `ddraw.ini` preset and a pinned (tag + size + SHA-256) fetch, shipped as a module; the one-line install command is **not wired yet** |
-| 3 | The Wine prefix is hand-made, so a second machine is a second adventure | A `doctor` subcommand with ten checkable lines, plus copy-paste prefix recipes (plain `wine`, Bottles, Heroic/Proton) |
+| 3 | The Wine prefix is hand-made, so a second machine is a second adventure | A `doctor` subcommand with eleven checkable lines, plus copy-paste prefix recipes (plain `wine`, Bottles, Heroic/Proton) |
 | 4 | The data layer (131 dBase III tables, 19 `MQDB` containers) is undocumented | A fact-graded data-layout document and a read-only `data` subcommand |
 
 The pack is a **launcher and a configuration layer**. It resolves the install,
@@ -78,12 +79,18 @@ supported sequence is `disciples-play --no-launch --game-dir …` and then
 - **Inspect before touching** — `--dry-run` prints the INI diff, the exact
   command line and the working directory; `--print-command` prints the command
   alone. Neither writes.
+- **Opt-in bigger window** — `--scale 3` wraps the launch in `gamescope` with
+  integer scaling, so the fixed 640×480 surface can fill a centred 1920×1440
+  window (measured once on one Wayland machine); `1` is off and the default, and
+  a machine without `gamescope` is unaffected. See
+  [`docs/wine-recipe.md`](docs/wine-recipe.md#a-bigger-window---scale-n).
 - **Three INI modes** — `backup` (default: in place + `.orig` once), `inplace`,
   `copy-tree` (leaves the GOG folder pristine at the cost of a 645 MB copy).
-- **`doctor`** — ten `PASS`/`FAIL`/`WARN` lines (install, INI, installation
-  paths, wine, ddraw override, wrapper, `InWindow`, music, video, display), a
-  one-line fix hint on every non-PASS line, and a stable `--json` schema.
-  Read-only, and it never prints a game hash.
+- **`doctor`** — eleven lines: ten `PASS`/`FAIL`/`WARN` checks (install, INI,
+  installation paths, wine, ddraw override, wrapper, `InWindow`, music, video,
+  display) plus an `INFO` line for `gamescope`. A one-line fix hint on every
+  non-PASS check, and a stable `--json` schema. Read-only, and it never prints a
+  game hash.
 - **`data`** — a read-only structural inventory of the install: per-table dBase
   III geometry with closing header arithmetic, `MQDB` chunk offsets/sizes with
   competing hypotheses scored, ID cross-reference counts, plain-text digests.
@@ -194,7 +201,8 @@ until the game's COM server is redirected. See
   reached through Heroic (2026-11-21) and with the command the launcher now runs
   in a 640×480 Wine virtual desktop (2026-11-22, typed at the shell) — but a
   human still has to run the launcher itself and tick it; the other ten (the 3×
-  window, Alt+Enter/Alt+Tab, mouse targeting,
+  window — `--scale 3` now emits the measured command, but nobody has ticked the
+  box — Alt+Enter/Alt+Tab, mouse targeting,
   palette animation, music without the CD, save/load, moving the install,
   `Config.exe` behaviour, a second prefix, cleanliness) await a human run.
 - Plain Wine without a virtual desktop: it crashed at `0059559E` on the
@@ -202,10 +210,11 @@ until the game's COM server is redirected. See
   launcher's virtual desktop it started there; other displays are untested.
 - The virtual desktop's presentation: the game's surface sits in the top-left
   corner and the rest is black (measured 2026-11-22, cause unknown); the game's
-  own windowed mode (`InWindow=1`) remains unsupported. A `gamescope` recipe
-  that fills a centred 1920×1440 window was measured once the same day — a
-  recipe, not a launcher flag
-  ([`docs/wine-recipe.md`](docs/wine-recipe.md#bigger-window-a-gamescope-recipe-not-something-the-launcher-does)).
+  own windowed mode (`InWindow=1`) remains unsupported. The opt-in `--scale 3`
+  flag now wraps the launch in gamescope and was measured to fill a centred
+  1920×1440 window once on the maintainer's machine — only that scale, and no
+  human has ticked the verification box
+  ([`docs/wine-recipe.md`](docs/wine-recipe.md#a-bigger-window---scale-n)).
 - Windows as a target: CI green is not a play test.
 - The wrapper's one-line install: the module works, the CLI command does not
   exist yet.
