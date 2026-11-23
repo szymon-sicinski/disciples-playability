@@ -219,6 +219,7 @@ def test_all_pass_exits_zero(
         "music": "PASS",
         "video": "PASS",
         "display": "PASS",
+        "gamescope": "INFO",  # always INFO: only --scale needs it
     }
     assert "25 .wav files in Music/" in out
     assert "wine-9.0 (synthetic)" in out
@@ -242,6 +243,62 @@ def test_wine_pass_detail_is_pinned(
     checks = {c["id"]: c for c in json.loads(capsys.readouterr().out)["checks"]}
     assert checks["wine"]["status"] == "pass"
     assert checks["wine"]["detail"] == WINE_PASS_DETAIL
+
+
+GAMESCOPE_FOUND = "INFO gamescope: gamescope found at /usr/bin/gamescope; only needed for --scale"
+GAMESCOPE_MISSING = (
+    "INFO gamescope: gamescope not found on PATH; only needed for --scale "
+    "(install it: dnf install gamescope / apt install gamescope)"
+)
+
+
+def test_gamescope_found_is_info_pinned_whole(
+    tmp_path: Path, with_display, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    """The whole line is pinned; the status is INFO and the run still exits 0."""
+    monkeypatch.setattr(
+        doctor.shutil,
+        "which",
+        lambda name: "/fake/wine" if name == "wine" else "/usr/bin/gamescope",
+    )
+    monkeypatch.setattr(doctor, "_wine_version", lambda _path: "wine-9.0 (synthetic)")
+    root = make_install(tmp_path / "install", with_wrapper=True, rewritten=True)
+
+    assert main(["doctor", "--game-dir", str(root)]) == 0
+
+    out = capsys.readouterr().out
+    assert GAMESCOPE_FOUND in out.splitlines()
+
+
+def test_gamescope_missing_is_info_pinned_whole_and_exit_0(
+    tmp_path: Path, fake_wine, with_display, capsys
+) -> None:
+    """Absence is INFO, never WARN/FAIL, and does not change the exit code."""
+    root = make_install(tmp_path / "install", with_wrapper=True, rewritten=True)
+
+    assert main(["doctor", "--game-dir", str(root)]) == 0
+
+    out = capsys.readouterr().out
+    assert GAMESCOPE_MISSING in out.splitlines()
+    assert not any(
+        line.startswith(("WARN gamescope:", "FAIL gamescope:")) for line in out.splitlines()
+    )
+
+
+def test_gamescope_json_status_is_info_in_both_cases(
+    tmp_path: Path, with_display, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    root = make_install(tmp_path / "install", with_wrapper=True, rewritten=True)
+    monkeypatch.setattr(doctor, "_wine_version", lambda _path: "wine-9.0 (synthetic)")
+    for found in ("/usr/bin/gamescope", None):
+        monkeypatch.setattr(
+            doctor.shutil,
+            "which",
+            lambda name, found=found: "/fake/wine" if name == "wine" else found,
+        )
+        assert main(["doctor", "--game-dir", str(root), "--json"]) == 0
+        checks = {c["id"]: c for c in json.loads(capsys.readouterr().out)["checks"]}
+        assert checks["gamescope"]["status"] == "info"
 
 
 def test_missing_exe_is_a_fail(
@@ -391,7 +448,7 @@ def test_json_schema_is_stable(
     assert set(payload) == {"checks", "ok"}
     assert payload["ok"] is True
     assert isinstance(payload["checks"], list)
-    assert len(payload["checks"]) == 10
+    assert len(payload["checks"]) == 11
 
     ids = []
     for check in payload["checks"]:
@@ -409,6 +466,7 @@ def test_json_schema_is_stable(
         "music",
         "video",
         "display",
+        "gamescope",
     ]
 
 
